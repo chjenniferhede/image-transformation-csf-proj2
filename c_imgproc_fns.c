@@ -25,7 +25,7 @@ uint32_t get_a( uint32_t pixel ) {
 
 // Given rgba values, make a pixel by putting r in the highest 
 // 8 bits, g in the next highest 8 bits, b in the next highest 8 bits
-int32_t make_pixel( uint32_t r, uint32_t g, uint32_t b, uint32_t a ) {
+uint32_t make_pixel( uint32_t r, uint32_t g, uint32_t b, uint32_t a ) {
   return (r << 24) | (g << 16) | (b << 8) | a;
 }
 
@@ -90,11 +90,22 @@ uint32_t rot_colors( struct Image *img, int32_t index ) {
 }
 
 // Average the the pixels 
-uint32_t avg_pixels( uint32_t pixel1, uint32_t pixel2 ) {
-  uint32_t r_avg = (get_r(pixel1) + get_r(pixel2)) / 2;
-  uint32_t g_avg = (get_g(pixel1) + get_g(pixel2)) / 2;
-  uint32_t b_avg = (get_b(pixel1) + get_b(pixel2)) / 2;
-  uint32_t a_avg = (get_a(pixel1) + get_a(pixel2)) / 2;
+uint32_t avg_pixels( uint32_t *pixels, int num_pixels) {
+  uint32_t r_total = 0;
+  uint32_t g_total = 0;
+  uint32_t b_total = 0;
+  uint32_t a_total = 0;
+    // Accumulate r, g, b, a values
+  for (int i = 0; i < num_pixels; i++) {
+    r_total += get_r(pixels[i]);
+    g_total += get_g(pixels[i]);
+    b_total += get_b(pixels[i]);
+    a_total += get_a(pixels[i]);
+  }
+  uint32_t r_avg = r_total / num_pixels;
+  uint32_t g_avg = g_total / num_pixels;
+  uint32_t b_avg = b_total / num_pixels;
+  uint32_t a_avg = a_total / num_pixels;
   return make_pixel(r_avg, g_avg, b_avg, a_avg);
 }
 
@@ -264,26 +275,32 @@ void imgproc_expand( struct Image *input_img, struct Image *output_img) {
       else if (row % 2 == 0 && col % 2 == 1) {
         int32_t indexOut = compute_index(output_img, row, col);
         // average of two pixels
-        int32_t pixel = avg_pixels(input_img->data[compute_index(input_img, row/2, col/2)], 
-                                   input_img->data[compute_index(input_img, row/2, col/2 + 1)]);
+        uint32_t pixels[2];
+        pixels[0] = input_img->data[compute_index(input_img, row/2, col/2)];
+        pixels[1] = input_img->data[compute_index(input_img, row/2, col/2 + 1)];
+        uint32_t pixel = avg_pixels(pixels, 2);
         output_img->data[indexOut] = pixel;
       }
       // Case 3: i odd, j (col) even
       else if (row % 2 == 1 && col % 2 == 0) {
         int32_t indexOut = compute_index(output_img, row, col);
         // average of two pixels
-        int32_t pixel = avg_pixels(input_img->data[compute_index(input_img, row/2, col/2)], 
-                                   input_img->data[compute_index(input_img, row/2 + 1, col/2)]);
+        uint32_t pixels[2];
+        pixels[0] = input_img->data[compute_index(input_img, row/2, col/2)];
+        pixels[1] = input_img->data[compute_index(input_img, row/2 + 1, col/2)];
+        uint32_t pixel = avg_pixels(pixels, 2);
         output_img->data[indexOut] = pixel;      
       }
       // Case 4: both odd
       else {
         int32_t indexOut = compute_index(output_img, row, col);
         // average of four pixels
-        int32_t pixel = avg_pixels(avg_pixels(input_img->data[compute_index(input_img, row/2, col/2)], 
-                                              input_img->data[compute_index(input_img, row/2, col/2 + 1)]), 
-                                   avg_pixels(input_img->data[compute_index(input_img, row/2 + 1, col/2)], 
-                                              input_img->data[compute_index(input_img, row/2 + 1, col/2 + 1)]));
+        uint32_t pixels[4];
+        pixels[0] = input_img->data[compute_index(input_img, row/2, col/2)];
+        pixels[1] = input_img->data[compute_index(input_img, row/2, col/2 + 1)];
+        pixels[2] = input_img->data[compute_index(input_img, row/2 + 1, col/2)];
+        pixels[3] = input_img->data[compute_index(input_img, row/2 + 1, col/2 + 1)];
+        uint32_t pixel = avg_pixels(pixels, 4);
         output_img->data[indexOut] = pixel;
       }
     }
