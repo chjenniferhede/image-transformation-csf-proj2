@@ -277,9 +277,12 @@ void imgproc_expand( struct Image *input_img, struct Image *output_img) {
         // average of two pixels
         uint32_t pixels[2];
         pixels[0] = input_img->data[compute_index(input_img, row/2, col/2)];
-        pixels[1] = input_img->data[compute_index(input_img, row/2, col/2 + 1)];
-        uint32_t pixel = avg_pixels(pixels, 2);
-        output_img->data[indexOut] = pixel;
+        if (col/2 + 1 < input_img->width) {
+          pixels[1] = input_img->data[compute_index(input_img, row/2, col/2 + 1)];
+        } else {
+          pixels[1] = 0; // if out of bounds, treat as black pixel
+        }
+        output_img->data[indexOut] = avg_pixels(pixels, 2);
       }
       // Case 3: i odd, j (col) even
       else if (row % 2 == 1 && col % 2 == 0) {
@@ -287,9 +290,12 @@ void imgproc_expand( struct Image *input_img, struct Image *output_img) {
         // average of two pixels
         uint32_t pixels[2];
         pixels[0] = input_img->data[compute_index(input_img, row/2, col/2)];
-        pixels[1] = input_img->data[compute_index(input_img, row/2 + 1, col/2)];
-        uint32_t pixel = avg_pixels(pixels, 2);
-        output_img->data[indexOut] = pixel;      
+        if (row/2 + 1 < input_img->height) {
+          pixels[1] = input_img->data[compute_index(input_img, row/2 + 1, col/2)];
+        } else {
+          pixels[1] = 0; // if out of bounds, treat as black pixel
+        }
+        output_img->data[indexOut] = avg_pixels(pixels, 2);    
       }
       // Case 4: both odd
       else {
@@ -297,11 +303,22 @@ void imgproc_expand( struct Image *input_img, struct Image *output_img) {
         // average of four pixels
         uint32_t pixels[4];
         pixels[0] = input_img->data[compute_index(input_img, row/2, col/2)];
-        pixels[1] = input_img->data[compute_index(input_img, row/2, col/2 + 1)];
-        pixels[2] = input_img->data[compute_index(input_img, row/2 + 1, col/2)];
-        pixels[3] = input_img->data[compute_index(input_img, row/2 + 1, col/2 + 1)];
-        uint32_t pixel = avg_pixels(pixels, 4);
-        output_img->data[indexOut] = pixel;
+        if (col/2 + 1 < input_img->width) {
+          pixels[1] = input_img->data[compute_index(input_img, row/2, col/2 + 1)];
+        } else {
+          pixels[1] = 0; // if out of bounds, treat as black pixel
+        }
+        if (row/2 + 1 < input_img->height) {
+          pixels[2] = input_img->data[compute_index(input_img, row/2 + 1, col/2)];
+        } else {
+          pixels[2] = 0; // if out of bounds, treat as black pixel
+        }
+        if (col/2 + 1 < input_img->width && row/2 + 1 < input_img->height) {
+          pixels[3] = input_img->data[compute_index(input_img, row/2 + 1, col/2 + 1)];
+        } else {
+          pixels[3] = 0; // if out of bounds, treat as black pixel
+        }
+        output_img->data[indexOut] = avg_pixels(pixels, 4);
       }
     }
   }
