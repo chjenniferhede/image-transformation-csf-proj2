@@ -76,7 +76,18 @@ uint32_t blur_pixel( struct Image *img, int32_t row, int32_t col, int32_t blur_d
   // Make the new pixel with the average RGB values and original alpha value
   return make_pixel(r_avg, g_avg, b_avg, a);
 }
-uint32_t rot_colors( struct Image *img, int32_t index );
+
+uint32_t rot_colors( struct Image *img, int32_t index ) { 
+  // Get the pixel at the index
+  uint32_t pixel = img->data[index];
+  // Get the r, g, b, a values of the pixel
+  uint32_t r = get_r(pixel);
+  uint32_t g = get_g(pixel);
+  uint32_t b = get_b(pixel);
+  uint32_t a = get_a(pixel);
+  // return the new pixel with rotated colors
+  return make_pixel(b, r, g, a);
+}
 
 //! Transform the entire image by shrinking it down both 
 //! horizontally and vertically (by potentially different
