@@ -4,7 +4,79 @@
 #include <assert.h>
 #include "imgproc.h"
 
-// TODO: define your helper functions here
+// Helper functions
+
+// pixel >> 24 leaves r in the lowest 8 bits
+// pixel >> 16 leaves g in the lowest 8 bits
+// pixel >> 8 leaves b in the lowest 8 bits
+// pixel & 0xFF leaves a in the lowest 8 bits
+uint32_t get_r( uint32_t pixel ) {
+  return (pixel >> 24) & 0xFF;
+}
+uint32_t get_g( uint32_t pixel ) {
+  return (pixel >> 16) & 0xFF;
+}
+uint32_t get_b( uint32_t pixel ) {
+  return (pixel >> 8) & 0xFF;
+}
+uint32_t get_a( uint32_t pixel ) {
+  return pixel & 0xFF;
+}
+
+// Given rgba values, make a pixel by putting r in the highest 
+// 8 bits, g in the next highest 8 bits, b in the next highest 8 bits
+int32_t make_pixel( uint32_t r, uint32_t g, uint32_t b, uint32_t a ) {
+  return (r << 24) | (g << 16) | (b << 8) | a;
+}
+
+// compute the index into the data array for the pixel at
+// row and col in img
+int32_t compute_index( struct Image *img, int32_t row, int32_t col ) {
+  return row * img->width + col;
+}
+
+// blur a pixel at (row, col) in img with the given blur_dist
+uint32_t blur_pixel( struct Image *img, int32_t row, int32_t col, int32_t blur_dist ) {
+  // Get the pixels within the bound
+  int32_t r_start = row - blur_dist;
+  int32_t r_end = row + blur_dist;
+  int32_t c_start = col - blur_dist;
+  int32_t c_end = col + blur_dist;
+
+  // Clamp image bounds
+  if (r_start < 0) { r_start = 0; }
+  if (r_end >= img->height) { r_end = img->height - 1; }
+  if (c_start < 0) { c_start = 0;}
+  if (c_end >= img->width) { c_end = img->width - 1; }
+
+  // Setup RGB variables
+  uint32_t r_total = 0;
+  uint32_t g_total = 0;
+  uint32_t b_total = 0;
+  uint32_t count = 0;
+
+  // Get the pixel and add the RGB values to the totals, keep counts
+  for (int32_t r = r_start; r <= r_end; r++) {
+    for (int32_t c = c_start; c <= c_end; c++) {
+      uint32_t pixel = img->data[compute_index(img, r, c)];
+      r_total += get_r(pixel);
+      g_total += get_g(pixel);
+      b_total += get_b(pixel);
+      count++;
+    }
+  }
+
+  // Calculate averages
+  uint32_t r_avg = r_total / count;
+  uint32_t g_avg = g_total / count;
+  uint32_t b_avg = b_total / count;
+
+  // Get the alpha value of the original pixel
+  uint32_t a = get_a(img->data[compute_index(img, row, col)]);
+  // Make the new pixel with the average RGB values and original alpha value
+  return make_pixel(r_avg, g_avg, b_avg, a);
+}
+uint32_t rot_colors( struct Image *img, int32_t index );
 
 //! Transform the entire image by shrinking it down both 
 //! horizontally and vertically (by potentially different
@@ -43,6 +115,7 @@
 //! @param yfac factor to downsize the image vertically; guaranteed to be positive
 void imgproc_squash( struct Image *input_img, struct Image *output_img, int32_t xfac, int32_t yfac ) {
   // TODO: implement
+
 }
 
 //! Transform the color component values in each input pixel
