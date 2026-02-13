@@ -89,6 +89,15 @@ uint32_t rot_colors( struct Image *img, int32_t index ) {
   return make_pixel(b, r, g, a);
 }
 
+// Average the the pixels 
+uint32_t avg_pixels( uint32_t pixel1, uint32_t pixel2 ) {
+  uint32_t r_avg = (get_r(pixel1) + get_r(pixel2)) / 2;
+  uint32_t g_avg = (get_g(pixel1) + get_g(pixel2)) / 2;
+  uint32_t b_avg = (get_b(pixel1) + get_b(pixel2)) / 2;
+  uint32_t a_avg = (get_a(pixel1) + get_a(pixel2)) / 2;
+  return make_pixel(r_avg, g_avg, b_avg, a_avg);
+}
+
 //! Transform the entire image by shrinking it down both 
 //! horizontally and vertically (by potentially different
 //! factors). This is equivalent to sampling the orignal image
@@ -125,7 +134,20 @@ uint32_t rot_colors( struct Image *img, int32_t index ) {
 //! @param xfac factor to downsize the image horizontally; guaranteed to be positive
 //! @param yfac factor to downsize the image vertically; guaranteed to be positive
 void imgproc_squash( struct Image *input_img, struct Image *output_img, int32_t xfac, int32_t yfac ) {
-  // TODO: implement
+  // Loop through the output image and sample from the input image
+  for (int32_t row = 0; row < output_img->height; row++) {
+    for (int32_t col = 0; col < output_img->width; col++) {
+      // To be divisible, they are just multiples of the factors. 
+      int32_t input_row = row * yfac; 
+      int32_t input_col = col * xfac;
+
+      // Check if the input row and column are in bounds
+      if (input_row < input_img->height && input_col < input_img->width) {
+        // rol and col are output image size, input row and col are computed, skipped indices of input)
+        output_img->data[compute_index(output_img, row, col)] = input_img->data[compute_index(input_img, input_row, input_col)];
+      }
+    }
+  }
 
 }
 
@@ -143,7 +165,13 @@ void imgproc_squash( struct Image *input_img, struct Image *output_img, int32_t 
 //! @param output_img pointer to the output Image (in which the
 //!                   transformed pixels should be stored)
 void imgproc_color_rot( struct Image *input_img, struct Image *output_img) {
-  // TODO: implement
+  // With helper function for each pixel, just loop through and output.
+  for (int32_t row = 0; row < input_img->height; row++) {
+    for (int32_t col = 0; col < input_img->width; col++) {
+      int32_t index = compute_index(input_img, row, col);
+      output_img->data[index] = rot_colors(input_img, index);
+    }
+  }
 }
 
 //! Transform the input image using a blur effect.
@@ -174,7 +202,13 @@ void imgproc_color_rot( struct Image *input_img, struct Image *output_img) {
 //!                  component averages used to determine the color
 //!                  components of the output pixel
 void imgproc_blur( struct Image *input_img, struct Image *output_img, int32_t blur_dist ) {
-  // TODO: implement
+  // With helper function for each pixel, just loop through and output.
+  for (int32_t row = 0; row < input_img->height; row++) {
+    for (int32_t col = 0; col < input_img->width; col++) {
+      int32_t index = compute_index(input_img, row, col);
+      output_img->data[index] = blur_pixel(input_img, row, col, blur_dist);
+    }
+  }
 }
 
 //! The `expand` transformation doubles the width and height of the image.
@@ -187,7 +221,7 @@ void imgproc_blur( struct Image *input_img, struct Image *output_img, int32_t bl
 //! If both i and j are even, then the color and alpha value of the output
 //! pixel are exactly the same as the input pixel at row i/2 and column j/2.
 //! 
-//! If i is even but j is odd, then the color components and alpha value
+//! If i (row) is even but j is odd, then the color components and alpha value
 //! of the output pixel are computed as the average of those in the input pixels
 //! in row i/2 at columns floor(j/2) and floor(j/2) + 1.
 //! 
@@ -217,5 +251,41 @@ void imgproc_blur( struct Image *input_img, struct Image *output_img, int32_t bl
 //! @param output_img pointer to the output Image (in which the
 //!                   transformed pixels should be stored)
 void imgproc_expand( struct Image *input_img, struct Image *output_img) {
-  // TODO: implement
+  for (int32_t row = 0; row < output_img->height; row++) {
+    for (int32_t col = 0; col < output_img->width; col++) {
+
+      // Case 1: both even (row and col are output size)
+      if (row % 2 == 0 && col % 2 == 0) {
+        int32_t indexOut = compute_index(output_img, row, col);
+        int32_t indexInput = compute_index(input_img, row/2, col/2);
+        output_img->data[indexOut] = input_img->data[indexInput];
+      }
+      // Case 2: i (row) even, j odd
+      else if (row % 2 == 0 && col % 2 == 1) {
+        int32_t indexOut = compute_index(output_img, row, col);
+        // average of two pixels
+        int32_t pixel = avg_pixels(input_img->data[compute_index(input_img, row/2, col/2)], 
+                                   input_img->data[compute_index(input_img, row/2, col/2 + 1)]);
+        output_img->data[indexOut] = pixel;
+      }
+      // Case 3: i odd, j (col) even
+      else if (row % 2 == 1 && col % 2 == 0) {
+        int32_t indexOut = compute_index(output_img, row, col);
+        // average of two pixels
+        int32_t pixel = avg_pixels(input_img->data[compute_index(input_img, row/2, col/2)], 
+                                   input_img->data[compute_index(input_img, row/2 + 1, col/2)]);
+        output_img->data[indexOut] = pixel;      
+      }
+      // Case 4: both odd
+      else {
+        int32_t indexOut = compute_index(output_img, row, col);
+        // average of four pixels
+        int32_t pixel = avg_pixels(avg_pixels(input_img->data[compute_index(input_img, row/2, col/2)], 
+                                              input_img->data[compute_index(input_img, row/2, col/2 + 1)]), 
+                                   avg_pixels(input_img->data[compute_index(input_img, row/2 + 1, col/2)], 
+                                              input_img->data[compute_index(input_img, row/2 + 1, col/2 + 1)]));
+        output_img->data[indexOut] = pixel;
+      }
+    }
+  }
 }
