@@ -1,3 +1,11 @@
+static struct TestImageData small = {
+  3, 3, {
+    0x000000FF, 0x000000FF, 0x000000FF,
+    0x000000FF, 0xFFFFFFFF, 0x000000FF,
+    0x000000FF, 0x000000FF, 0x000000FF
+  } 
+};
+
 static struct TestImageData smol = {
   21, 15, {
     0xac9d90ff, 0xa89b90ff, 0xa5988dff, 0xa3968bff, 0xa29689ff, 0x9c9084ff, 

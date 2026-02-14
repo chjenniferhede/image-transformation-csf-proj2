@@ -26,10 +26,9 @@ struct TestImageData {
 // data multiple times in different test functions.)
 typedef struct {
   // Test images (for basic image transform tests)
-  struct Image smol, smol_squash_1_1, smol_squash_3_1, smol_squash_1_3,
+  struct Image small, smol, smol_squash_1_1, smol_squash_3_1, smol_squash_1_3,
                smol_color_rot, smol_blur_0, smol_blur_3, smol_expand;
 
-  // TODO: add additional test fixture data as needed
 } TestObjs;
 
 // Functions to create and clean up a test fixture object
@@ -47,7 +46,12 @@ void test_squash_basic( TestObjs *objs );
 void test_color_rot_basic( TestObjs *objs );
 void test_blur_basic( TestObjs *objs );
 void test_expand_basic( TestObjs *objs );
-// TODO: add prototypes for additional test functions
+
+// My tests
+void test_pixel_getters( TestObjs *objs );
+void test_pixel_maker( TestObjs *objs );
+void test_compute_index( TestObjs *objs );
+void test_blur_pixel( TestObjs *objs );
 
 int main( int argc, char **argv ) {
   // allow the specific test to execute to be specified as the
@@ -64,6 +68,12 @@ int main( int argc, char **argv ) {
   TEST( test_color_rot_basic );
   TEST( test_blur_basic );
   TEST( test_expand_basic );
+
+  // My tests
+  TEST( test_pixel_getters ); 
+  TEST( test_pixel_maker );
+  TEST( test_compute_index );
+  TEST( test_blur_pixel );
 
   TEST_FINI();
 }
@@ -84,6 +94,7 @@ TestObjs *setup( void ) {
   init_image_from_testdata( &objs->smol_blur_0, &smol_blur_0 );
   init_image_from_testdata( &objs->smol_blur_3, &smol_blur_3 );
   init_image_from_testdata( &objs->smol_expand, &smol_expand );
+  init_image_from_testdata( &objs->small, &small );
 
   return objs;
 }
@@ -91,9 +102,6 @@ TestObjs *setup( void ) {
 void cleanup( TestObjs *objs ) {
   // Note that the test Images don't need to be cleaned
   // up, because their data isn't dynamically allocated
-
-  // TODO: clean up any test fixture data
-
   free( objs );
 }
 
@@ -169,6 +177,20 @@ do { \
   destroy_img( out_img ); \
 } while (0)
 
+// objs->smol is the og test image, does not matter here, just to have sth indexed
+#define INDEX_TEST( row, col, expected ) \
+do { \
+  int32_t index = compute_index( &objs->small, row, col ); \
+  ASSERT( index == expected ); \
+} while (0)
+
+#define SINGLE_PIXEL_BLUR_TEST( row, col, blur_dist, expected ) \
+do { \
+  uint32_t pixel = blur_pixel( &objs->small, row, col, blur_dist ); \
+  ASSERT( pixel == expected ); \
+} while (0)
+
+/* Functions that run the tests using multiple test images. */
 void test_squash_basic( TestObjs *objs ) {
   SQUASH_TEST( 1, 1 );
   SQUASH_TEST( 3, 1 );
@@ -188,4 +210,43 @@ void test_expand_basic( TestObjs *objs ) {
   XFORM_TEST( expand );
 }
 
-// TODO: define additional test functions
+// Test pixel getter 
+void test_pixel_getters( TestObjs *objs ) { 
+  uint32_t pixel = make_pixel(0xAA, 0xBB, 0xCC, 0xDD);
+  ASSERT( get_r(pixel) == 0x000000AA );
+  ASSERT( get_g(pixel) == 0x000000BB );
+  ASSERT( get_b(pixel) == 0x000000CC );
+  ASSERT( get_a(pixel) == 0x000000DD );
+}
+
+// Test pixel maker
+void test_pixel_maker( TestObjs *objs ) {
+  uint32_t pixel = make_pixel(0xAA, 0xBB, 0xCC, 0xDD);
+  ASSERT( pixel == 0xAABBCCDD );
+  uint32_t pixel2 = make_pixel(0xFF, 0x00, 0x00, 0xFF);
+  ASSERT( pixel2 == 0xFF0000FF );
+} 
+
+// Test compute index
+void test_compute_index( TestObjs *objs ) {
+  INDEX_TEST( 0, 0, 0 );
+  INDEX_TEST( 0, 1, 1 );
+  INDEX_TEST( 0, 2, 2 );
+  INDEX_TEST( 1, 0, 3 );
+  INDEX_TEST( 1, 1, 4 );
+  INDEX_TEST( 2, 0, 6 );
+}
+
+// Test blur_pixel on a single pixel 
+void test_blur_pixel( TestObjs *objs ) {
+  // blur with zero, same pixel 
+  SINGLE_PIXEL_BLUR_TEST( 0, 0, 0, 0x000000FF );
+  SINGLE_PIXEL_BLUR_TEST( 1, 1, 0, 0xFFFFFFFF );
+
+  SINGLE_PIXEL_BLUR_TEST( 0, 0, 1, 0x3F3F3FFF ); // avg of 4 pixels (0,0), (0,1), (1,0), (1,1), 0xFF/4 = 0x3F
+  SINGLE_PIXEL_BLUR_TEST( 1, 1, 1, 0x1C1C1CFF ); // FF/9 is 1C
+
+  // test clamping
+  SINGLE_PIXEL_BLUR_TEST( 1, 1, 3, 0x1C1C1CFF );
+  SINGLE_PIXEL_BLUR_TEST( 0, 0, 4, 0x1C1C1CFF ); 
+}
