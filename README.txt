@@ -1,3 +1,3 @@
-TODO: names of team members
+@Jennifer He
 
-TODO: contributions of each team member
+All the implementations and tests. 
