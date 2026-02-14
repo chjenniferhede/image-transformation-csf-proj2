@@ -6,15 +6,25 @@
 
 #include "image.h" // for struct Image and related functions
 
+//! Getter functions for the color components of a pixel. Each should return
+//! the value of the corresponding color component in the pixel (between 0 and 255).
 uint32_t get_r( uint32_t pixel );
 uint32_t get_g( uint32_t pixel );
 uint32_t get_b( uint32_t pixel );
 uint32_t get_a( uint32_t pixel );
 
+//! Given the r, g, b, a values of a pixel, return a uint32_t representing
+//! the pixel with those color component values. 
 uint32_t make_pixel( uint32_t r, uint32_t g, uint32_t b, uint32_t a );
+
+//! Compute the index into the data array for the pixel at row and col in img
 int32_t compute_index( struct Image *img, int32_t row, int32_t col );
+
+//! Blur the pixel at (row, col) in img with the given blur_dist and return the blurred pixel value
 uint32_t blur_pixel( struct Image *img, int32_t row, int32_t col, int32_t blur_dist );
-uint32_t rot_colors( struct Image *img, int32_t index );
+
+//! Rotate the color components of the pixel at the given index in img and return the new pixel value
+uint32_t rot_pixel( struct Image *img, int32_t index );
 
 
 //! Transform the entire image by shrinking it down both 
@@ -138,7 +148,5 @@ void imgproc_blur( struct Image *input_img, struct Image *output_img, int32_t bl
 //! @param output_img pointer to the output Image (in which the
 //!                   transformed pixels should be stored)
 void imgproc_expand( struct Image *input_img, struct Image *output_img);
-
-// TODO: add prototypes for your helper functions
 
 #endif // IMGPROC_H

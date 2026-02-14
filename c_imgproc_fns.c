@@ -77,7 +77,7 @@ uint32_t blur_pixel( struct Image *img, int32_t row, int32_t col, int32_t blur_d
   return make_pixel(r_avg, g_avg, b_avg, a);
 }
 
-uint32_t rot_colors( struct Image *img, int32_t index ) { 
+uint32_t rot_pixel( struct Image *img, int32_t index ) { 
   // Get the pixel at the index
   uint32_t pixel = img->data[index];
   // Get the r, g, b, a values of the pixel
@@ -180,7 +180,7 @@ void imgproc_color_rot( struct Image *input_img, struct Image *output_img) {
   for (int32_t row = 0; row < input_img->height; row++) {
     for (int32_t col = 0; col < input_img->width; col++) {
       int32_t index = compute_index(input_img, row, col);
-      output_img->data[index] = rot_colors(input_img, index);
+      output_img->data[index] = rot_pixel(input_img, index);
     }
   }
 }

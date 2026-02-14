@@ -52,6 +52,7 @@ void test_pixel_getters( TestObjs *objs );
 void test_pixel_maker( TestObjs *objs );
 void test_compute_index( TestObjs *objs );
 void test_blur_pixel( TestObjs *objs );
+void test_color_rot_pixel( TestObjs *objs );
 
 int main( int argc, char **argv ) {
   // allow the specific test to execute to be specified as the
@@ -74,6 +75,7 @@ int main( int argc, char **argv ) {
   TEST( test_pixel_maker );
   TEST( test_compute_index );
   TEST( test_blur_pixel );
+  TEST( test_color_rot_pixel );
 
   TEST_FINI();
 }
@@ -190,6 +192,12 @@ do { \
   ASSERT( pixel == expected ); \
 } while (0)
 
+#define SINGLE_PIXEL_ROT_TEST( row, col, expected ) \
+do { \
+  uint32_t pixel = rot_pixel( &objs->smol, compute_index( &objs->smol, row, col ) ); \
+  ASSERT( pixel == expected ); \
+} while (0)
+
 /* Functions that run the tests using multiple test images. */
 void test_squash_basic( TestObjs *objs ) {
   SQUASH_TEST( 1, 1 );
@@ -249,4 +257,10 @@ void test_blur_pixel( TestObjs *objs ) {
   // test clamping
   SINGLE_PIXEL_BLUR_TEST( 1, 1, 3, 0x1C1C1CFF );
   SINGLE_PIXEL_BLUR_TEST( 0, 0, 4, 0x1C1C1CFF ); 
+}
+
+// Test rot_pixel on a single pixel
+void test_color_rot_pixel( TestObjs *objs ) {
+  SINGLE_PIXEL_ROT_TEST( 0, 0, 0x90ac9dff ); // 0xac9d90ff to 0x90ac9dff
+  SINGLE_PIXEL_ROT_TEST( 0, 1, 0x90a89bff ); // 0xa89b90ff to 0x90a89bff
 }
