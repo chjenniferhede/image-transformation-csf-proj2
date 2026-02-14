@@ -274,51 +274,42 @@ void imgproc_expand( struct Image *input_img, struct Image *output_img) {
       // Case 2: i (row) even, j odd
       else if (row % 2 == 0 && col % 2 == 1) {
         int32_t indexOut = compute_index(output_img, row, col);
-        // average of two pixels
         uint32_t pixels[2];
-        pixels[0] = input_img->data[compute_index(input_img, row/2, col/2)];
+        size_t count = 0;
+        pixels[count++] = input_img->data[compute_index(input_img, row/2, col/2)];
         if (col/2 + 1 < input_img->width) {
-          pixels[1] = input_img->data[compute_index(input_img, row/2, col/2 + 1)];
-        } else {
-          pixels[1] = 0; // if out of bounds, treat as black pixel
-        }
-        output_img->data[indexOut] = avg_pixels(pixels, 2);
+          pixels[count++] = input_img->data[compute_index(input_img, row/2, col/2 + 1)];
+        } 
+        output_img->data[indexOut] = avg_pixels(pixels, count);
       }
       // Case 3: i odd, j (col) even
       else if (row % 2 == 1 && col % 2 == 0) {
         int32_t indexOut = compute_index(output_img, row, col);
-        // average of two pixels
         uint32_t pixels[2];
-        pixels[0] = input_img->data[compute_index(input_img, row/2, col/2)];
+        size_t count = 0;
+        pixels[count++] = input_img->data[compute_index(input_img, row/2, col/2)];
         if (row/2 + 1 < input_img->height) {
-          pixels[1] = input_img->data[compute_index(input_img, row/2 + 1, col/2)];
-        } else {
-          pixels[1] = 0; // if out of bounds, treat as black pixel
-        }
-        output_img->data[indexOut] = avg_pixels(pixels, 2);    
+          pixels[count++] = input_img->data[compute_index(input_img, row/2 + 1, col/2)];
+        } 
+        output_img->data[indexOut] = avg_pixels(pixels, count);    
       }
       // Case 4: both odd
       else {
         int32_t indexOut = compute_index(output_img, row, col);
         // average of four pixels
         uint32_t pixels[4];
-        pixels[0] = input_img->data[compute_index(input_img, row/2, col/2)];
+        size_t count = 0; 
+        pixels[count++] = input_img->data[compute_index(input_img, row/2, col/2)];
         if (col/2 + 1 < input_img->width) {
-          pixels[1] = input_img->data[compute_index(input_img, row/2, col/2 + 1)];
-        } else {
-          pixels[1] = 0; // if out of bounds, treat as black pixel
-        }
+          pixels[count++] = input_img->data[compute_index(input_img, row/2, col/2 + 1)];
+        } 
         if (row/2 + 1 < input_img->height) {
-          pixels[2] = input_img->data[compute_index(input_img, row/2 + 1, col/2)];
-        } else {
-          pixels[2] = 0; // if out of bounds, treat as black pixel
-        }
+          pixels[count++] = input_img->data[compute_index(input_img, row/2 + 1, col/2)];
+        } 
         if (col/2 + 1 < input_img->width && row/2 + 1 < input_img->height) {
-          pixels[3] = input_img->data[compute_index(input_img, row/2 + 1, col/2 + 1)];
-        } else {
-          pixels[3] = 0; // if out of bounds, treat as black pixel
-        }
-        output_img->data[indexOut] = avg_pixels(pixels, 4);
+          pixels[count++] = input_img->data[compute_index(input_img, row/2 + 1, col/2 + 1)];
+        } 
+        output_img->data[indexOut] = avg_pixels(pixels, count);
       }
     }
   }
