@@ -18,6 +18,15 @@ struct TestImageData {
 // Include test image data
 #include "test_image_data.h"
 
+// Custom test image for helper function tests, data.h setup does not work in gradescope
+static struct TestImageData small = {
+  3, 3, {
+    0x000000FF, 0x000000FF, 0x000000FF,
+    0x000000FF, 0xFFFFFFFF, 0x000000FF,
+    0x000000FF, 0x000000FF, 0x000000FF
+  }
+};
+
 // Data type for the test fixture object.
 // This contains data (including Image objects) that
 // can be accessed by test functions. This is useful
