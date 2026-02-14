@@ -26,6 +26,8 @@ uint32_t blur_pixel( struct Image *img, int32_t row, int32_t col, int32_t blur_d
 //! Rotate the color components of the pixel at the given index in img and return the new pixel value
 uint32_t rot_pixel( struct Image *img, int32_t index );
 
+//! Average the given pixels and return the resulting pixel value
+uint32_t avg_pixels( uint32_t *pixels, int num_pixels );
 
 //! Transform the entire image by shrinking it down both 
 //! horizontally and vertically (by potentially different

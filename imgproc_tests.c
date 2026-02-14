@@ -53,6 +53,7 @@ void test_pixel_maker( TestObjs *objs );
 void test_compute_index( TestObjs *objs );
 void test_blur_pixel( TestObjs *objs );
 void test_color_rot_pixel( TestObjs *objs );
+void test_avg_pixel( TestObjs *objs );
 
 int main( int argc, char **argv ) {
   // allow the specific test to execute to be specified as the
@@ -76,6 +77,7 @@ int main( int argc, char **argv ) {
   TEST( test_compute_index );
   TEST( test_blur_pixel );
   TEST( test_color_rot_pixel );
+  TEST( test_avg_pixel );
 
   TEST_FINI();
 }
@@ -198,6 +200,12 @@ do { \
   ASSERT( pixel == expected ); \
 } while (0)
 
+#define AVG_PIXEL_TEST(pixels, count, expected) \
+do { \
+  uint32_t pixel = avg_pixels(pixels, count); \
+  ASSERT( pixel == expected ); \
+} while (0)
+
 /* Functions that run the tests using multiple test images. */
 void test_squash_basic( TestObjs *objs ) {
   SQUASH_TEST( 1, 1 );
@@ -263,4 +271,9 @@ void test_blur_pixel( TestObjs *objs ) {
 void test_color_rot_pixel( TestObjs *objs ) {
   SINGLE_PIXEL_ROT_TEST( 0, 0, 0x90ac9dff ); // 0xac9d90ff to 0x90ac9dff
   SINGLE_PIXEL_ROT_TEST( 0, 1, 0x90a89bff ); // 0xa89b90ff to 0x90a89bff
+}
+
+void test_avg_pixel( TestObjs *objs ) {
+  uint32_t pixels[4] = { make_pixel(0x00, 0x00, 0x00, 0xFF), make_pixel(0xFF, 0xFF, 0xFF, 0x00), make_pixel(0x80, 0x80, 0x80, 0xFF), make_pixel(0x40, 0x40, 0x40, 0xFF) };
+  AVG_PIXEL_TEST(pixels, 4, make_pixel(0x6F, 0x6F, 0x6F, 0xBF)); // 00 + FF + 80 + 40 / 4 = 6F, avg of a is FF + FF + FF + 00 / 4 = BF
 }
