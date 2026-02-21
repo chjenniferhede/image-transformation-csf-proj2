@@ -9,12 +9,96 @@
 #define IMAGE_HEIGHT_OFFSET  4
 #define IMAGE_DATA_OFFSET    8
 
-/*
- * TODO: define your helper functions here.
- * Don't forget to use the .globl directive to make
- * them visible to the test code.
- */
+/** Helper functions **/
+/* Get rgba components */
 
+	.global get_r
+get_r:
+	/* Register use:
+	 *   %edi: pixel value (input)
+	 *   %eax: red component value (output)
+	 */
+	movl %edi, %eax		/* copy pixel to return register, edi is the lower 32 bit*/
+	shrl $24, %eax      /* shift right 24 bits */
+	andl $0xFF, %eax    /* mask to lowest 8 bits */
+	ret
+
+	.global get_g
+get_g:
+	/* Register use:
+	 *   %edi: pixel value (input)
+	 *   %eax: green component value (output)
+	 */
+	movl %edi, %eax		/* copy pixel to return register */
+	shrl $16, %eax 		/* shift right 16 bits */
+	andl $0xFF, %eax	/* mask to lowest 8 bits */
+	ret
+
+	.global get_b
+get_b:
+	/* Register use:
+	 *   %edi: pixel value (input)
+	 *   %eax: blue component value (output)
+	 */
+	movl %edi, %eax		/* copy pixel to return register */
+	shrl $8, %eax 		/* shift right 8 bits */
+	andl $0xFF, %eax	/* mask to lowest 8 bits */
+	ret
+
+	.global get_a
+get_a:
+	/* Register use:
+	 *   %edi: pixel value (input)
+	 *   %eax: alpha component value (output)
+	 */
+	movl %edi, %eax		/* copy pixel to return register */
+	andl $0xFF, %eax	/* mask to lowest 8 bits */
+	ret
+
+	.global make_pixel
+make_pixel:
+	/* Register use:
+	 *   %edi: red component value (input)
+	 *   %esi: green component value (input)
+	 *   %edx: blue component value (input)
+	 *   %ecx: alpha c\omponent value (input)
+	 *   %eax: pixel value (output)
+	 */
+	movl %edi, %eax     /* copy red component to return register */
+	shll $8, %eax 		/* shift left 8 bits */
+	orl %esi, %eax		/* bitwise or green component to return register */
+	shll $8, %eax 		/* shift left 8 bits */
+	orl %edx, %eax		/* bitwise or blue component to return register */
+	shll $8, %eax 		/* shift left 8 bits */
+	orl %ecx, %eax		/* bitwise or alpha component to return register */	
+	ret
+
+	.global compute_index
+compute_index:
+	/* Register use:
+	 *   %rdi: image pointer (input)
+	 *   %esi: row (input)
+	 *   %edx: column (input)
+	 *   %eax: pixel index (output)
+	 */
+	movl IMAGE_WIDTH_OFFSET(%rdi), %eax	/* load image width (4 bytes into rdi) into eax */
+	imull %esi, %eax			/* multiply row by image width */
+	addl %edx, %eax			/* add column to get pixel index */
+	ret
+
+
+	.global rot_pixel
+rot_pixel:
+	/* Register use:
+	 *   %rdi: image pointer (input)
+	 *   %esi: index (input)
+	 *   %eax: new 32 bit rotted pixel (output)
+	 */
+
+
+
+
+	 
 /*
  * Definitions of image transformation functions
  */
