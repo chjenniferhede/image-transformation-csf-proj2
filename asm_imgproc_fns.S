@@ -61,7 +61,7 @@ make_pixel:
 	 *   %edi: red component value (input)
 	 *   %esi: green component value (input)
 	 *   %edx: blue component value (input)
-	 *   %ecx: alpha c\omponent value (input)
+	 *   %ecx: alpha component value (input)
 	 *   %eax: pixel value (output)
 	 */
 	movl %edi, %eax     /* copy red component to return register */
@@ -75,30 +75,94 @@ make_pixel:
 
 	.global compute_index
 compute_index:
+
 	/* Register use:
 	 *   %rdi: image pointer (input)
 	 *   %esi: row (input)
 	 *   %edx: column (input)
 	 *   %eax: pixel index (output)
 	 */
-	movl IMAGE_WIDTH_OFFSET(%rdi), %eax	/* load image width (4 bytes into rdi) into eax */
+	movl IMAGE_WIDTH_OFFSET(%rdi), %eax	/* access image width (4 bytes into rdi) into eax */
 	imull %esi, %eax			/* multiply row by image width */
-	addl %edx, %eax			/* add column to get pixel index */
+	addl %edx, %eax			/* add column to get pixel index */	
 	ret
+
 
 
 	.global rot_pixel
 rot_pixel:
 	/* Register use:
-	 *   %rdi: image pointer (input)
-	 *   %esi: index (input)
-	 *   %eax: new 32 bit rotted pixel (output)
+	 *   %rdi: pointer to Image struct (input)
+	 *   %rsi: pixel index (input)
+	 *
+	 *   %rdx  - base pointer to pixel array (pointer to first pixel)
+	 *   %r12d - target pixel value (temp)
+	 *   %edi - hold the pixel value for helper function calls (temp)
+	 *
+	 *   %r13d  - original r component (temp)
+	 *   %r14d  - original g component (temp)
+	 *   %r15d  - original b component (temp)
+	 *   %rbx  - original a component (temp)
+	 *
+	 *   %eax - rotted pixel (output)
 	 */
+	# save callee-saved registers we will use
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	pushq %rbx
+	# Not using stack, and this 5 * 8 + 8 is aligned
+
+	# load pointer-to-data from struct (memory read)
+	movq IMAGE_DATA_OFFSET(%rdi), %rdx    /* rdx = img->data, still a pointer */
+
+	# fetch pixel value (4 bytes) at index rsi
+	movl (%rdx,%rsi,4), %r12d             /* r12d = pixel, access the value */
+
+	# extract components 
+	movl %r12d, %edi /* move pixel value to edi for helper call */
+	call get_r
+	movl %eax, %r13d  /* save r to r13d */
+
+	movl %r12d, %edi
+	call get_g
+	movl %eax, %r14d  /* save g to r14d */
+
+	movl %r12d, %edi
+	call get_b
+	movl %eax, %r15d  /* save b to r15d */
+
+	movl %r12d, %edi
+	call get_a
+	movl %eax, %ebx  /* save a to ebx */
+
+	# build rotted pixel
+	movl %r15d, %edi /* r = old b */
+	movl %r13d, %esi  /* g = old r */
+	movl %r14d, %edx  /* b = old g */
+	movl %ebx, %ecx /* a = still a */
+	call make_pixel /* takes make_pixel(edi, esi, edx, ecx) */
+
+	popq %rbx
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	ret
+
+# TODO
+	.global blur_pixel
+blur_pixel:
+
+	ret
+
+	.global avg_pixels
+avg_pixels:
+
+	ret
 
 
-
-
-	 
 /*
  * Definitions of image transformation functions
  */
