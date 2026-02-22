@@ -157,6 +157,7 @@ blur_pixel:
 
 	ret
 
+# TODO
 	.global avg_pixels
 avg_pixels:
 
@@ -206,7 +207,131 @@ avg_pixels:
  */
 	.globl imgproc_squash
 imgproc_squash:
-	/* TODO: implement */
+	/*
+	 *   %rdi: pointer to input Image struct (input)
+	 *   %rsi: pointer to output Image struct (input)
+	 *   %edx: xfac (input)
+	 *   %ecx: yfac (input)
+	 *
+	 *   %rdx input image data pointer (temp)
+	 *   %rbx output image data pointer (temp)
+	 *   %r12d row index for loop (temp)
+	 *   %r13d column index for loop (temp)
+	 *   %r14d selected input row (temp)
+	 *   %r15d selected input col (temp)
+	 *
+	 *   reserved registers:
+	 *   %rdi reserved to call compute index
+	 *   %rsi reserved to call compute index
+	 *   %rdx reserved to call compute index
+	 *
+	 *   Stack usage:
+	 *   -4(%rbp): input image width (temp)
+	 *   -8(%rbp): input image height (temp)
+	 *   -12(%rbp): output image width (temp)
+	 *   -16(%rbp): output image height (temp)
+	 *   -20(%rbp): xfac (temp)
+	 *   -24(%rbp): yfac (temp)
+	 *   -32(%rbp): input image pointer (temp)
+	 *   -40(%rbp): output image pointer (temp)
+	 *   -48(%rbp): input image data pointer (temp)
+	 *   -56(%rbp): output image data pointer (temp)
+	 */
+
+	pushq %rbp
+	movq %rsp, %rbp
+	subq $56, %rsp /* allocate space on stack for 5 callee-saved registers on stack */
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	pushq %rbx
+
+	# save image dimensions from input/output to stack
+	movl IMAGE_WIDTH_OFFSET(%rdi), %eax        /* eax = input_img->width */
+	movl %eax, -4(%rbp)                         /* -4(%rbp) = input_img->width */
+	movl IMAGE_HEIGHT_OFFSET(%rdi), %eax       
+	movl %eax, -8(%rbp)		                   /* -8(%rbp) = input_img->height */
+	movl IMAGE_WIDTH_OFFSET(%rsi), %eax        
+	movl %eax, -12(%rbp)                       /* -12(%rbp) = output_img->width */
+	movl IMAGE_HEIGHT_OFFSET(%rsi), %eax       
+	movl %eax, -16(%rbp)                       /* -16(%rbp) = output_img->height */
+	movl %edx, -20(%rbp)                       /* -20(%rbp) = xfac */
+	movl %ecx, -24(%rbp)                       /* -24(%rbp) = yfac */
+
+	# save the struct pointers on stack too
+	movq %rdi, -32(%rbp) /* save input image pointer on stack */
+	movq %rsi, -40(%rbp) /* save output image pointer on stack */
+
+	# load data pointer from struct (memory read)
+	movq IMAGE_DATA_OFFSET(%rdi), %rdx   
+	movq %rdx, -48(%rbp) 	/* -48(%rbp) = input_img->data, still a pointer */
+	movq IMAGE_DATA_OFFSET(%rsi), %rdx
+	movq %rdx, -56(%rbp)    /* -56(%rbp) = output_img->data, still a pointer */
+
+
+	# loop through output image pixels and select corresponding input pixels to copy over
+	movl $0, %r12d  /* row index for loop */
+	movl $0, %r13d  /* column index for loop */
+	.L_row_loop:
+		cmpl -16(%rbp), %r12d          
+		jge .L_done_row_loop /* if row (r12d) >= output_img height (%-16(%rbp)) exit */
+
+	.L_col_loop:
+		cmpl -12(%rbp), %r13d          
+		jge .L_done_col_loop /* if col (r13d) >= output_img width (%-12(%rbp)) exit */
+
+		movl %r12d, %r14d 
+		imull -24(%rbp), %r14d /* r14d (input row) = output row index * yfac */
+		movl %r13d, %r15d 
+		imull -20(%rbp), %r15d /* r15d (input column) = output column index * xfac */
+
+		# check if selected input pixel is in bounds
+		cmpl -8(%rbp), %r14d          
+		jge .L_continue_if_out_of_bounds /* if input_row (r14d) >= input_img height (%-8(%rbp)) skip */
+		cmpl -4(%rbp), %r15d    
+		jge .L_continue_if_out_of_bounds /* if input_col (r15d) >= input_img width (%-4(%rbp)) skip */
+
+		# Compute the index for selected input pixel 
+		movq -32(%rbp), %rdi 
+		movl %r14d, %esi 
+		movl %r15d, %edx 
+		call compute_index 
+		movl %eax, %r14d /* r14d = input pixel index */
+
+		# Compute the index for output pixel
+		movq -40(%rbp), %rdi 
+		movl %r12d, %esi 
+		movl %r13d, %edx 
+		call compute_index 
+		movl %eax, %r15d /* r15d = output pixel index */
+
+		# Get the data ptr from stack
+		movq -48(%rbp), %rdx 
+		movq -56(%rbp), %rbx 
+
+		# Copy pixel over
+		movl (%rdx, %r14, 4), %eax /* eax = input pixel */
+		movl %eax, (%rbx, %r15, 4) /* output pixel index = input pixel value */
+
+	.L_continue_if_out_of_bounds:
+		incl %r13d 
+		jmp .L_col_loop /* loop again if reach here */
+	.L_done_col_loop:
+		movl $0, %r13d /* col = 0 for next row */
+
+		incl %r12d 
+		jmp .L_row_loop /* loop again if reach here */
+	.L_done_row_loop:
+
+
+	popq %rbx
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	addq $56, %rsp
+	popq %rbp
 	ret
 
 /*
@@ -226,7 +351,91 @@ imgproc_squash:
  */
 	.globl imgproc_color_rot
 imgproc_color_rot:
-	/* TODO: implement */
+	/*
+	 * Input registers:
+	 *   %rdi: pointer to input Image struct (input)
+	 *   %rsi: pointer to output Image struct (input)
+	 *
+	 * Temp registers:
+	 *   %rbx: curr loop index  
+	 *   %r12: last loop index 
+	 *   %rdx: data pointer (base addr) for output img (at the end)
+	 *
+	 * Memory use:
+	 *   -8(%rbp): input image pointer
+	 *   -16(%rbp): output image pointer
+	 *   -24(%rbp): image width 
+	 *   -28(%rbp): image height 
+	 *   -32(%rbp): input image data pointer
+	 *   -40(%rbp): output image data pointer
+	 */
+
+	pushq %rbp
+	movq %rsp, %rbp
+	subq $48, %rsp
+	pushq %r12
+	pushq %rbx
+
+	# This function is reletively simple, iterate through each pixel and run rot_pixel on it.
+
+	# Save the struct pointers on stack
+	movq %rdi, -8(%rbp) /* save input image pointer on stack */
+	movq %rsi, -16(%rbp) /* save output image pointer on stack */
+
+	# Save the width and height of one image (they are the same size) on stack
+	movl IMAGE_WIDTH_OFFSET(%rdi), %eax        
+	movl %eax, -24(%rbp)                       /* -24(%rbp) = image width */
+	movl IMAGE_HEIGHT_OFFSET(%rdi), %eax	    
+	movl %eax, -28(%rbp)                       /* -28(%rbp) = image height */
+
+	# Save the data pointer from struct
+	movq IMAGE_DATA_OFFSET(%rdi), %rdx   
+	movq %rdx, -32(%rbp) 	/* -32(%rbp) = input_img->data */
+	movq IMAGE_DATA_OFFSET(%rsi), %rdx   
+	movq %rdx, -40(%rbp) 	/* -40(%rbp) = output_img->data */
+
+	# Compute the last pixel index and store it in r12d
+	movq -8(%rbp), %rdi /* rdi = input image */
+
+	# row is height - 1
+	movl -28(%rbp), %esi /* rsi = height */
+	decl %esi
+
+	# col is width - 1
+	movl -24(%rbp), %edx
+	decl %edx
+
+	# Call compute_index to get the last pixel index
+	call compute_index 
+	movl %eax, %r12d /* r12d = last pixel index */
+
+	movl $0, %ebx  /* curr pixel index */
+
+	# loop through each pixel index and run rot_pixel on it
+	.L_rot_loop: 
+	cmpl %r12d, %ebx
+	jg .L_rot_loop_end  /* if curr index (ebx) > last index (%r12d) exit */
+
+	# Rot the pixel at index ebx and store it in output image
+	movq -8(%rbp), %rdi /* input image (param 1) for rot_pixel */
+	movl %ebx, %esi /* pixel index (param 2) for rot_pixel */
+	call rot_pixel /* returns rotted pixel (a 32 bit number) in eax */
+
+	# Store the rotted pixel in output image at same index
+	movq -40(%rbp), %rdx /* rdx = output image base addr pointer */
+	movl %eax, (%rdx, %rbx, 4) /* Access output_img pixel (rdx) at rbx * 4, put rotted pixel in */
+
+	# Increment and start loop again
+	incl %ebx 
+	jmp .L_rot_loop
+	.L_rot_loop_end:
+
+
+	popq %rbx
+	popq %r12
+	addq $48, %rsp
+	popq %rbp
+	
 	ret
 
 
