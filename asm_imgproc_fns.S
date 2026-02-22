@@ -193,7 +193,7 @@ avg_pixels:
 
 	pushq %rbp
 	movq %rsp, %rbp
-	subq $40, %rsp
+	subq $24, %rsp
 	pushq %r12
 	pushq %r13
 	pushq %r14
@@ -268,7 +268,7 @@ avg_pixels:
 	popq %r14
 	popq %r13
 	popq %r12
-	addq $40, %rsp
+	addq $24, %rsp
 	popq %rbp
 	ret
 
@@ -636,59 +636,57 @@ imgproc_expand:
 	 *   r14d: output pixel index for this iteration (one for each loop)
 	 *
 	 *   r8d: input pixel index j/2 and i/2 (temp)
-	 *   r9d: input pixel index j/2 and i/2 + 1 (temp)
-	 *   r10d: input pixel index j/2 + 1 and i/2 (temp)
-	 *   r11d: input pixel index j/2 + 1 and i/2 + 1 (temp)
+	 *   r15d: number of pixels to average (temp)
 	 *
 	 * Memory use:
 	 *   -8(%rbp): input image pointer
 	 *   -16(%rbp): output image pointer
-	 *   -24(%rbp): input image height
-	 *   -28(%rbp): input image width
-	 *   -32(%rbp): output image height
-	 *   -36(%rbp): output image width
-	 *   -44(%rbp): input data pointer
-	 *   -52(%rbp): output data pointer
-	 *   -60(%rbp): temporary storage for pixel indices
-	 *   -64(%rbp): temporary storage for pixel indices
-	 *   -68(%rbp): temporary storage for pixel indices
-	 *   -72(%rbp): temporary storage for pixel indices
+	 *   -20(%rbp): input image height
+	 *   -24(%rbp): input image width
+	 *   -28(%rbp): output image height
+	 *   -32(%rbp): output image width
+	 *   -40(%rbp): input data pointer
+	 *   -48(%rbp): output data pointer
+	 *   -60(%rbp): reserve for array
+	 *   -64(%rbp): reserve for array
+	 *   -68(%rbp): reserve for array
+	 *   -72(%rbp): Base address for array of pixels to average
 	 */
 
 	pushq %rbp
 	movq %rsp, %rbp
-	subq $80, %rsp
 	pushq %r12
 	pushq %r13
 	pushq %r14
 	pushq %r15
 	pushq %rbx
+	subq $88, %rsp
 
 	# Save the struct pointers on stack
 	movq %rdi, -8(%rbp) /* save input image pointer on stack */
 	movq %rsi, -16(%rbp) /* save output image pointer on stack */
 	movl IMAGE_HEIGHT_OFFSET(%rdi), %eax
-	movl %eax, -24(%rbp) /* -24(%rbp) = input image height */
+	movl %eax, -20(%rbp) /* -20(%rbp) = input image height */
 	movl IMAGE_WIDTH_OFFSET(%rdi), %eax
-	movl %eax, -28(%rbp) /* -28(%rbp) = input image width */
+	movl %eax, -24(%rbp) /* -24(%rbp) = input image width */
 	movl IMAGE_HEIGHT_OFFSET(%rsi), %eax
-	movl %eax, -32(%rbp) /* -32(%rbp) = output image height */
+	movl %eax, -28(%rbp) /* -28(%rbp) = output image height */
 	movl IMAGE_WIDTH_OFFSET(%rsi), %eax
-	movl %eax, -36(%rbp) /* -36(%rbp) = output image width */
+	movl %eax, -32(%rbp) /* -32(%rbp) = output image width */
 	movq IMAGE_DATA_OFFSET(%rdi), %rax 
-	movq %rax, -44(%rbp) /* -44(%rbp) = input data pointer */
+	movq %rax, -40(%rbp) /* -40(%rbp) = input data pointer */
 	movq IMAGE_DATA_OFFSET(%rsi), %rax
-	movq %rax, -52(%rbp) /* -52(%rbp) = output data pointer */
+	movq %rax, -48(%rbp) /* -48(%rbp) = output data pointer */
 
 	movl $0, %r12d  /* row index for loop */
 	movl $0, %r13d  /* column index for loop */
 	.L_expand_row_loop:
-		cmpl -32(%rbp), %r12d          
-		jge .L_done_expand_row_loop /* if row (r12d) >= output_img height (%-32(%rbp)) exit */
+		cmpl -28(%rbp), %r12d          
+		jge .L_done_expand_row_loop /* if row (r12d) >= output_img height (%-28(%rbp)) exit */
 
 	.L_expand_col_loop:
-		cmpl -36(%rbp), %r13d          
-		jge .L_done_expand_col_loop /* if col (r13d) >= output_img width (%-36(%rbp)) exit */
+		cmpl -32(%rbp), %r13d          
+		jge .L_done_expand_col_loop /* if col (r13d) >= output_img width (%-32(%rbp)) exit */
 
 		# Compute index for output pixel
 		movq -16(%rbp), %rdi 
@@ -697,108 +695,139 @@ imgproc_expand:
 		call compute_index
 		movl %eax, %r14d /* r14d = output pixel index */
 
-		/* Input indices !! For simplicity, we know very clearly that comput_index won't modify rdi, rsi, or rdx */
-		# Compute (floor of row/2 and col/2) 
-		movq -8(%rbp), %rdi 
-		movl %r12d, %esi 
-		shrl $1, %esi /* r12d (row index) / 2 */
-		movl %r13d, %edx 
-		shrl $1, %edx /* r13d (col index) / 2 */
+		# Compute (floor of row/2 and col/2)
+		movq -8(%rbp), %rdi
+		movl %r12d, %esi
+		shrl $1, %esi /* esi = row/2 */
+		movl %r13d, %edx
+		shrl $1, %edx /* edx = col/2 */
 		call compute_index
-		movl %eax, %r8d 
+		movl %eax, %r8d
 
-		# Compute (floor of row/2 and col/2 + 1)
-		addl $1, %edx /* edx = col/2 + 1 */
-		call compute_index
-		subl $1, %edx /* edx = col/2 */
-		movl %eax, %r9d
-
-		# Compute (floor of row/2 + 1 and col/2)
-		addl $1, %esi /* esi = row/2 + 1 */
-		call compute_index
-		movl %eax, %r10d
-
-		# Compute (floor of row/2 + 1 and col/2 + 1)
-		addl $1, %edx /* edx = col/2 + 1 */
-		call compute_index
-		movl %eax, %r11d
-
-		# Check row = even or odd
-		testl $1, %r12d /* r12d(row) & 1, jmp to even if zero */
-		jz .L_row_even
-		jnz .L_row_odd 
-
-		# Amount of pixels to avg (differ based on edge cases)
-		movl $0, %r15d 
+		# Check if case 1
+		testl $1, %r12d 
+		jnz .L_expand_case_2_3_4 /* if row index is odd jump to not case 1 */
+		testl $1, %r13d 
+		jnz .L_expand_case_2_3_4 /* if col index is odd jump to not case 1 */
 
 		# Case 1: both even: At row floor(i/2) and column floor(j/2)
-		.L_row_even:
-			# Move the pixel value from input(r8d) to output(r14d)
-			movq -44(%rbp), %rdx /* input data pointer from stack */
+			movq -40(%rbp), %rdx /* get input data pointer from stack */
 			movl (%rdx, %r8, 4), %eax /* eax = input pixel value */
-			jmp .L_done_conditional 
+			jmp .L_store_result_pixel 
 
-		# Case 2: row even, col odd: At row floor(i/2) and column floor(j/2) + 1
-		.L_row_even_col_odd:
-			# Two pixels: r8d and maybe r9d
-			movl %r8d, -60(%rbp) 
-			movl %r9d, -64(%rbp) 
+		# Case 2, 3, 4
+            .L_expand_case_2_3_4:
+            # Setup pixels array (store pixel values)
+            movl $1, %r15d /* number of pixels to average */
 
-			# call avg_pixels
-			movq -60(%rbp), %rdi /* ptr to array of pixel indices for avg_pixels */
-			movl %r15d, %esi /* number of pixels to average */
-			call avg_pixels /* returns average pixel in eax */
-			jmp .L_done_conditional 
+            # One pixel is always included (row/2, col/2)
+            movq -40(%rbp), %rdx /* load input data pointer before reading */
+			movl (%rdx, %r8, 4), %eax /* eax = pixel value at (row/2, col/2) */
+			movl %eax, -72(%rbp)
 
-		# Case 3: row odd, col even
-		.L_row_odd:
-			# Jump to case 4 if col is odd
-			testl $1, %r13d /* r13d(col) & 1, jmp to odd if non-zero */
-			jnz .L_row_odd_col_odd /* if col index is odd jump to row odd col odd */
-		
-			# Two pixels: r8d and r10d
-			movl %r8d, -60(%rbp) 
-			movl %r10d, -64(%rbp) 
+		# If row is odd, add row/2 + 1 and col/2 pixel to array
+			testl $1, %r12d
+			jz .L_expand_check_col_odd /* if row index is even skip */
 
-			# call avg_pixels
-			movq -60(%rbp), %rdi /* ptr to array of pixel indices for avg_pixels */
-			movl %r15d, %esi /* number of pixels to average */
-			call avg_pixels /* returns average pixel in eax */
-			jmp .L_done_conditional 
+			# Compute row/2 + 1 in %esi 
+			movl %r12d, %esi
+			shrl $1, %esi
+			addl $1, %esi
+			cmpl -20(%rbp), %esi /* if row/2 + 1 is out of bounds skip */
+			jge .L_expand_check_col_odd 
 
-		# Case 4: row odd, col odd
-		.L_row_odd_col_odd:
-			# Four pixels: r8d, r9d, r10d, r11d
-			movl %r8d, -60(%rbp) 
-			movl %r9d, -64(%rbp) 
-			movl %r10d, -68(%rbp) 
-			movl %r11d, -72(%rbp) 
+			# call compute index for (row/2 + 1, col/2)
+			movq -8(%rbp), %rdi
+			movl %r13d, %edx
+			shrl $1, %edx
+			call compute_index
 
-			# call avg_pixels
-			movq -60(%rbp), %rdi /* ptr to array of pixel indices for avg_pixels */
-			movl %r15d, %esi /* number of pixels to average */
-			call avg_pixels /* returns average pixel in eax */
+			# Store the pixel value into array
+			movq -40(%rbp), %rdx /* load input data pointer before reading */
+			movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2 + 1, col/2) */
+			leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
+			movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
+			incl %r15d /* pixel to average ++ */
 
-	.L_done_conditional:
+        # If col is odd, add row/2 and col/2 + 1 pixel to array
+			.L_expand_check_col_odd: 
+			testl $1, %r13d
+			jz .L_call_avg_pixels /* if col is even, skip */
+
+			# Compute col/2 + 1 in edx
+			movl %r13d, %edx
+			shrl $1, %edx
+			addl $1, %edx
+			cmpl -24(%rbp), %edx /* if col/2 + 1 is out of bounds skip */
+			jge .L_call_avg_pixels 
+
+			# call compute index for (row/2, col/2 + 1)
+			movq -8(%rbp), %rdi /* rdi = input image pointer for compute_index */
+			movl %r12d, %esi
+			shrl $1, %esi
+			call compute_index
+
+			# Store the pixel value into array
+			movq -40(%rbp), %rdx /* load input data pointer before reading */
+			movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2, col/2 + 1) */
+			leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
+			movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
+			incl %r15d /* pixel to average ++ */
+
+		# Add row/2 + 1 and col/2 + 1 pixel (r11d) to average if row and col are odd
+			testl $1, %r12d
+			jz .L_call_avg_pixels /* if row is even, skip (we only reach here when col was odd) */
+
+			# Compute row/2 + 1
+			movl %r12d, %esi
+			shrl $1, %esi
+			addl $1, %esi
+			cmpl -20(%rbp), %esi
+			jge .L_call_avg_pixels /* if out of bounds skip */
+
+			# Compute col/2 + 1
+			movl %r13d, %edx
+			shrl $1, %edx
+			addl $1, %edx
+			cmpl -24(%rbp), %edx
+			jge .L_call_avg_pixels /* if out of bounds skip */
+
+			# call compute index for (row/2 + 1, col/2 + 1)
+			movq -8(%rbp), %rdi
+			call compute_index
+
+			# Store the pixel into array
+			movq -40(%rbp), %rdx /* load input data pointer before reading */
+			movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2 + 1, col/2 + 1) */
+			leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
+			movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
+			incl %r15d /* pixel to average ++ */
+
+		# Call avg_pixels
+		.L_call_avg_pixels:
+		leaq -72(%rbp), %rdi /* ptr to array of pixel values for avg_pixels */
+		movl %r15d, %esi /* number of pixels to average */
+		call avg_pixels /* returns average pixel in eax */
+
 		# Store eax (result pixel) to output pixel index (r14d)
-		movq -52(%rbp), %rbx /* output data pointer from stack */
+		.L_store_result_pixel:
+		movq -48(%rbp), %rbx /* output data pointer from stack */
 		movl %eax, (%rbx, %r14, 4) /* output pixel value = input pixel value */
 
 		incl %r13d 
 		jmp .L_expand_col_loop /* loop again if reach here */
-
 	.L_done_expand_col_loop:
 		movl $0, %r13d /* col = 0 for next row */
 		incl %r12d 
 		jmp .L_expand_row_loop /* outer loop again if reach here */
 	.L_done_expand_row_loop:
 
+	addq $88, %rsp
 	popq %rbx
 	popq %r15
 	popq %r14
 	popq %r13
 	popq %r12
-	addq $80, %rsp
 	popq %rbp
 	ret
 
