@@ -96,9 +96,9 @@ rot_pixel:
 	 *   %rsi: pixel index (input)
 	 *
 	 *   %rdx  - base pointer to pixel array (pointer to first pixel)
-	 *   %r12d - target pixel value (temp)
 	 *   %edi - hold the pixel value for helper function calls (temp)
-	 *
+
+	 *   %r12d - target pixel value (temp)
 	 *   %r13d  - original r component (temp)
 	 *   %r14d  - original g component (temp)
 	 *   %r15d  - original b component (temp)
@@ -107,12 +107,15 @@ rot_pixel:
 	 *   %eax - rotted pixel (output)
 	 */
 	# save callee-saved registers we will use
+    pushq %rbp
+    movq  %rsp, %rbp
+
 	pushq %r12
 	pushq %r13
 	pushq %r14
 	pushq %r15
 	pushq %rbx
-	# Not using stack, and this 5 * 8 + 8 is aligned
+    subq $8, %rsp          # align stack before calls
 
 	# load pointer-to-data from struct (memory read)
 	movq IMAGE_DATA_OFFSET(%rdi), %rdx    /* rdx = img->data, still a pointer */
@@ -144,11 +147,15 @@ rot_pixel:
 	movl %ebx, %ecx /* a = still a */
 	call make_pixel /* takes make_pixel(edi, esi, edx, ecx) */
 
+    addq $8, %rsp       
+
 	popq %rbx
 	popq %r15
 	popq %r14
 	popq %r13
 	popq %r12
+
+	popq %rbp
 	ret
 
 # TODO
@@ -357,7 +364,7 @@ imgproc_color_rot:
 	 *   %rsi: pointer to output Image struct (input)
 	 *
 	 * Temp registers:
-	 *   %rbx: curr loop index  
+	 *   %ebx: curr loop index  
 	 *   %r12: last loop index 
 	 *   %rdx: data pointer (base addr) for output img (at the end)
 	 *
@@ -365,16 +372,17 @@ imgproc_color_rot:
 	 *   -8(%rbp): input image pointer
 	 *   -16(%rbp): output image pointer
 	 *   -24(%rbp): image width 
-	 *   -28(%rbp): image height 
-	 *   -32(%rbp): input image data pointer
-	 *   -40(%rbp): output image data pointer
+	 *   -32(%rbp): image height 
+	 *   -40(%rbp): input image data pointer
+	 *   -48(%rbp): output image data pointer
 	 */
 
 	pushq %rbp
 	movq %rsp, %rbp
-	subq $48, %rsp
+	
 	pushq %r12
 	pushq %rbx
+	subq $48, %rsp
 
 	# This function is reletively simple, iterate through each pixel and run rot_pixel on it.
 
@@ -386,19 +394,19 @@ imgproc_color_rot:
 	movl IMAGE_WIDTH_OFFSET(%rdi), %eax        
 	movl %eax, -24(%rbp)                       /* -24(%rbp) = image width */
 	movl IMAGE_HEIGHT_OFFSET(%rdi), %eax	    
-	movl %eax, -28(%rbp)                       /* -28(%rbp) = image height */
+	movl %eax, -32(%rbp)                       /* -32(%rbp) = image height */
 
 	# Save the data pointer from struct
 	movq IMAGE_DATA_OFFSET(%rdi), %rdx   
-	movq %rdx, -32(%rbp) 	/* -32(%rbp) = input_img->data */
+	movq %rdx, -40(%rbp) 	/* -40(%rbp) = input_img->data */
 	movq IMAGE_DATA_OFFSET(%rsi), %rdx   
-	movq %rdx, -40(%rbp) 	/* -40(%rbp) = output_img->data */
+	movq %rdx, -48(%rbp) 	/* -48(%rbp) = output_img->data */
 
 	# Compute the last pixel index and store it in r12d
 	movq -8(%rbp), %rdi /* rdi = input image */
 
 	# row is height - 1
-	movl -28(%rbp), %esi /* rsi = height */
+	movl -32(%rbp), %esi /* rsi = height */
 	decl %esi
 
 	# col is width - 1
@@ -422,18 +430,18 @@ imgproc_color_rot:
 	call rot_pixel /* returns rotted pixel (a 32 bit number) in eax */
 
 	# Store the rotted pixel in output image at same index
-	movq -40(%rbp), %rdx /* rdx = output image base addr pointer */
-	movl %eax, (%rdx, %rbx, 4) /* Access output_img pixel (rdx) at rbx * 4, put rotted pixel in */
+	movq -48(%rbp), %rdx /* get the output image data pointer from stack */
+	movl %eax, (%rdx, %rbx, 4) /* Access output_img pixel (rdx) at ebx * 4, put rotted pixel in */
 
 	# Increment and start loop again
 	incl %ebx 
 	jmp .L_rot_loop
 	.L_rot_loop_end:
 
-
+	addq $48, %rsp
 	popq %rbx
 	popq %r12
-	addq $48, %rsp
+
 	popq %rbp
 	
 	ret
