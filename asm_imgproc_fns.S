@@ -164,10 +164,112 @@ blur_pixel:
 
 	ret
 
-# TODO
+/* 
+	Helper function to compute the average of a group of pixels. 
+	The number of pixels to average is determined by the input parameter 
+	num_pixels. The pixel values to average are stored in an array 
+	pointed to by pixel_values. 
+	The output is the average pixel value.
+	Alpha will not also be averaged
+*/
 	.global avg_pixels
 avg_pixels:
+	/*
+	 * Register use:
+	 *   %rdi: pointer to array of pixel values (input)
+	 *   %esi: number of pixels to average (input)
+	 *
+	 *   %r12d: r total (temp)
+	 *   %r13d: g total (temp)
+	 *   %r14d: b total (temp)
+	 *   %r15d: a total (temp)
 
+	 *  %rbx: loop index (temp)
+	 *
+	 * Memory use:
+	 *  -8(%rbp): pointer to array of pixel values (temp)
+	 *  -16(%rbp): number of pixels to average (temp)
+	 */
+
+	pushq %rbp
+	movq %rsp, %rbp
+	subq $40, %rsp
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	pushq %rbx
+
+	# Store the input values on the stack
+	movq %rdi, -8(%rbp) /* -8(%rbp) = pointer to array of pixel values */
+	movq %rsi, -16(%rbp) /* -16(%rbp) = number of pixels to average */
+
+	# Set up component total variables
+	movl $0, %r12d /* r total */
+	movl $0, %r13d /* g total */
+	movl $0, %r14d /* b total */
+	movl $0, %r15d /* a total */
+
+	# Loop through the pixel values and add up the r, g, b, a components
+	movl $0, %ebx /* loop index */
+	.L_avg_loop:
+	cmpl -16(%rbp), %ebx
+	jge .L_avg_loop_end /* if loop index (ebx) >= number of pixels, exit loop */
+
+	# Get the pixel value at index ebx
+	movq -8(%rbp), %rdi /* get pointer to array of pixel values from stack */
+	movl (%rdi, %rbx, 4), %eax /* eax = pixel value at index ebx */
+
+	# Get the r, g, b, a and add to totals
+	movl %eax, %edi /* edi = pixel value */
+	call get_r
+	addl %eax, %r12d /* add r to r total */
+	call get_g
+	addl %eax, %r13d /* add g to g total */
+	call get_b
+	addl %eax, %r14d /* add b to b total */
+	call get_a
+	addl %eax, %r15d /* add a to a total */
+
+	incl %ebx /* increment loop index */
+	jmp .L_avg_loop /* loop again */
+	.L_avg_loop_end:
+
+	# Compute average (use the same registers) 
+	movl %r12d, %eax /* we want to do eax / <num_pixels> */
+	xorl %edx, %edx /* edx = 0, will be used for division */
+	divl -16(%rbp) /* eax now have the average r value */
+	movl %eax, %r12d /* save average r to r12d */
+
+	movl %r13d, %eax /* eax = g total */
+	xorl %edx, %edx /* edx = 0 */
+	divl -16(%rbp) /* eax now have the average g value */
+	movl %eax, %r13d /* save average g to r13d */
+
+	movl %r14d, %eax /* eax = b total */
+	xorl %edx, %edx /* edx = 0 */
+	divl -16(%rbp) /* eax now have the average b value */
+	movl %eax, %r14d /* save average b to r14d */
+
+	movl %r15d, %eax /* eax = a total */
+	xorl %edx, %edx /* edx = 0 */
+	divl -16(%rbp) /* eax now have the average a value */
+	movl %eax, %r15d /* save average a to r15d */
+
+	# Call the build pixel helper
+	movl %r12d, %edi /* r component for make_pixel */
+	movl %r13d, %esi /* g component for make_pixel */
+	movl %r14d, %edx /* b component for make_pixel */
+	movl %r15d, %ecx /* a component for make_pixel */
+	call make_pixel /* returns average pixel in eax */
+
+	popq %rbx
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	addq $40, %rsp
+	popq %rbp
 	ret
 
 
