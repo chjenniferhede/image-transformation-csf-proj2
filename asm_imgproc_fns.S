@@ -278,10 +278,10 @@ blur_pixel:
 	movl $0, %ebx            /* ebx = array index */
 	movl -36(%rbp), %r12d    /* r12d = current row = start_row */
 
-.L_blur_row_loop:
-	cmpl -40(%rbp), %r12d
-	jg .L_blur_row_done       /* if cur_row > end_row, done */
-	movl -44(%rbp), %r13d    /* r13d = current col = start_col */
+	.L_blur_row_loop:
+		cmpl -40(%rbp), %r12d
+		jg .L_blur_row_done       /* if cur_row > end_row, done */
+		movl -44(%rbp), %r13d    /* r13d = current col = start_col */
 
 	.L_blur_col_loop:
 		cmpl -48(%rbp), %r13d
@@ -307,7 +307,7 @@ blur_pixel:
 		incl %r12d
 		jmp .L_blur_row_loop
 
-.L_blur_row_done:
+	.L_blur_row_done:
 	# Call avg_pixels(array_ptr, num_pixels) -> averaged pixel in eax
 	movq %r14, %rdi           /* rdi = base pointer to pixel array */
 	movl -52(%rbp), %esi      /* esi = num_pixels */
@@ -945,96 +945,96 @@ imgproc_expand:
 		testl $1, %r13d 
 		jnz .L_expand_case_2_3_4 /* if col index is odd jump to not case 1 */
 
-		# Case 1: both even: At row floor(i/2) and column floor(j/2)
-			movq -40(%rbp), %rdx /* get input data pointer from stack */
-			movl (%rdx, %r8, 4), %eax /* eax = input pixel value */
-			jmp .L_store_result_pixel 
+	# Case 1: both even: At row floor(i/2) and column floor(j/2)
+		movq -40(%rbp), %rdx /* get input data pointer from stack */
+		movl (%rdx, %r8, 4), %eax /* eax = input pixel value */
+		jmp .L_store_result_pixel 
 
-		# Case 2, 3, 4
-            .L_expand_case_2_3_4:
-            # Setup pixels array (store pixel values)
-            movl $1, %r15d /* number of pixels to average */
+	# Case 2, 3, 4
+		.L_expand_case_2_3_4:
+		# Setup pixels array (store pixel values)
+		movl $1, %r15d /* number of pixels to average */
 
-            # One pixel is always included (row/2, col/2)
-            movq -40(%rbp), %rdx /* load input data pointer before reading */
-			movl (%rdx, %r8, 4), %eax /* eax = pixel value at (row/2, col/2) */
-			movl %eax, -72(%rbp)
+		# One pixel is always included (row/2, col/2)
+		movq -40(%rbp), %rdx /* load input data pointer before reading */
+		movl (%rdx, %r8, 4), %eax /* eax = pixel value at (row/2, col/2) */
+		movl %eax, -72(%rbp)
 
-		# If row is odd, add row/2 + 1 and col/2 pixel to array
-			testl $1, %r12d
-			jz .L_expand_check_col_odd /* if row index is even skip */
+	# If row is odd, add row/2 + 1 and col/2 pixel to array
+		testl $1, %r12d
+		jz .L_expand_check_col_odd /* if row index is even skip */
 
-			# Compute row/2 + 1 in %esi 
-			movl %r12d, %esi
-			shrl $1, %esi
-			addl $1, %esi
-			cmpl -20(%rbp), %esi /* if row/2 + 1 is out of bounds skip */
-			jge .L_expand_check_col_odd 
+		# Compute row/2 + 1 in %esi 
+		movl %r12d, %esi
+		shrl $1, %esi
+		addl $1, %esi
+		cmpl -20(%rbp), %esi /* if row/2 + 1 is out of bounds skip */
+		jge .L_expand_check_col_odd 
 
-			# call compute index for (row/2 + 1, col/2)
-			movq -8(%rbp), %rdi
-			movl %r13d, %edx
-			shrl $1, %edx
-			call compute_index
+		# call compute index for (row/2 + 1, col/2)
+		movq -8(%rbp), %rdi
+		movl %r13d, %edx
+		shrl $1, %edx
+		call compute_index
 
-			# Store the pixel value into array
-			movq -40(%rbp), %rdx /* load input data pointer before reading */
-			movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2 + 1, col/2) */
-			leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
-			movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
-			incl %r15d /* pixel to average ++ */
+		# Store the pixel value into array
+		movq -40(%rbp), %rdx /* load input data pointer before reading */
+		movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2 + 1, col/2) */
+		leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
+		movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
+		incl %r15d /* pixel to average ++ */
 
-        # If col is odd, add row/2 and col/2 + 1 pixel to array
-			.L_expand_check_col_odd: 
-			testl $1, %r13d
-			jz .L_call_avg_pixels /* if col is even, skip */
+	# If col is odd, add row/2 and col/2 + 1 pixel to array
+		.L_expand_check_col_odd: 
+		testl $1, %r13d
+		jz .L_call_avg_pixels /* if col is even, skip */
 
-			# Compute col/2 + 1 in edx
-			movl %r13d, %edx
-			shrl $1, %edx
-			addl $1, %edx
-			cmpl -24(%rbp), %edx /* if col/2 + 1 is out of bounds skip */
-			jge .L_call_avg_pixels 
+		# Compute col/2 + 1 in edx
+		movl %r13d, %edx
+		shrl $1, %edx
+		addl $1, %edx
+		cmpl -24(%rbp), %edx /* if col/2 + 1 is out of bounds skip */
+		jge .L_call_avg_pixels 
 
-			# call compute index for (row/2, col/2 + 1)
-			movq -8(%rbp), %rdi /* rdi = input image pointer for compute_index */
-			movl %r12d, %esi
-			shrl $1, %esi
-			call compute_index
+		# call compute index for (row/2, col/2 + 1)
+		movq -8(%rbp), %rdi /* rdi = input image pointer for compute_index */
+		movl %r12d, %esi
+		shrl $1, %esi
+		call compute_index
 
-			# Store the pixel value into array
-			movq -40(%rbp), %rdx /* load input data pointer before reading */
-			movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2, col/2 + 1) */
-			leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
-			movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
-			incl %r15d /* pixel to average ++ */
+		# Store the pixel value into array
+		movq -40(%rbp), %rdx /* load input data pointer before reading */
+		movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2, col/2 + 1) */
+		leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
+		movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
+		incl %r15d /* pixel to average ++ */
 
-		# Add row/2 + 1 and col/2 + 1 pixel (r11d) to average if row and col are odd
-			testl $1, %r12d
-			jz .L_call_avg_pixels /* if row is even, skip (we only reach here when col was odd) */
+	# Add row/2 + 1 and col/2 + 1 pixel (r11d) to average if row and col are odd
+		testl $1, %r12d
+		jz .L_call_avg_pixels /* if row is even, skip (we only reach here when col was odd) */
 
-			# Compute row/2 + 1
-			movl %r12d, %esi
-			shrl $1, %esi
-			addl $1, %esi
-			cmpl -20(%rbp), %esi
-			jge .L_call_avg_pixels /* if out of bounds skip */
+		# Compute row/2 + 1
+		movl %r12d, %esi
+		shrl $1, %esi
+		addl $1, %esi
+		cmpl -20(%rbp), %esi
+		jge .L_call_avg_pixels /* if out of bounds skip */
 
-			# Compute col/2 + 1
-			movl %r13d, %edx
-			shrl $1, %edx
-			addl $1, %edx /* Out of bound checked in the last step */
+		# Compute col/2 + 1
+		movl %r13d, %edx
+		shrl $1, %edx
+		addl $1, %edx /* Out of bound checked in the last step */
 
-			# call compute index for (row/2 + 1, col/2 + 1)
-			movq -8(%rbp), %rdi
-			call compute_index
+		# call compute index for (row/2 + 1, col/2 + 1)
+		movq -8(%rbp), %rdi
+		call compute_index
 
-			# Store the pixel into array
-			movq -40(%rbp), %rdx /* load input data pointer before reading */
-			movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2 + 1, col/2 + 1) */
-			leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
-			movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
-			incl %r15d /* pixel to average ++ */
+		# Store the pixel into array
+		movq -40(%rbp), %rdx /* load input data pointer before reading */
+		movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2 + 1, col/2 + 1) */
+		leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
+		movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
+		incl %r15d /* pixel to average ++ */
 
 		# Call avg_pixels
 		.L_call_avg_pixels:
