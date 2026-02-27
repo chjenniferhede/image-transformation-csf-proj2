@@ -158,7 +158,6 @@ rot_pixel:
 	popq %rbp
 	ret
 
-# TODO
 	.global blur_pixel
 blur_pixel:
 	/*
@@ -172,7 +171,7 @@ blur_pixel:
 	 *   -4(%rbp):  row
 	 *   -8(%rbp):  col
 	 *   -12(%rbp): blur distance
-	 *   -16(%rbp): (4 bytes padding for alignment)
+	 *   -16(%rbp): original alpha of pixel
 	 *   -24(%rbp): pointer to Image struct (8 bytes)
 	 *   -28(%rbp): image height
 	 *   -32(%rbp): image width
@@ -708,15 +707,15 @@ imgproc_color_rot:
 		# Increment and start loop again
 		incl %ebx 
 		jmp .L_rot_loop
-		.L_rot_loop_end:
+	.L_rot_loop_end:
 
-		addq $48, %rsp
-		popq %rbx
-		popq %r12
+	addq $48, %rsp
+	popq %rbx
+	popq %r12
 
-		popq %rbp
-	
-	ret
+	popq %rbp
+
+ret
 
 
 /*
@@ -750,8 +749,94 @@ imgproc_color_rot:
  */
 	.globl imgproc_blur
 imgproc_blur:
-	/* TODO: implement */
+	/*
+	 * Register use:
+	 *   %rdi: pointer to input Image struct (input)
+	 *   %rsi: pointer to output Image struct (input)
+	 *   %ecx: blur distance (input)
+	 *
+	 * Memory use:
+	 *   TODO: describe how memory in the stack frame is used
+	 */
+
+	pushq %rbp
+	movq %rsp, %rbp
+	subq $48, %rsp
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	pushq %rbx
+
+	# Save the struct pointers on stack
+	movq %rdi, -8(%rbp) /* save input image pointer on stack */
+	movq %rsi, -16(%rbp) /* save output image pointer on stack */
+	movl %edx, -20(%rbp) /* -20(%rbp) = blur distance */
+
+	# Save the width and height of one image (they are the same size) on stack
+	movl IMAGE_WIDTH_OFFSET(%rdi), %eax        
+	movl %eax, -24(%rbp)                       /* -24(%rbp) = image width */
+	movl IMAGE_HEIGHT_OFFSET(%rdi), %eax	    
+	movl %eax, -32(%rbp)                       /* -32(%rbp) = image height */
+
+	# Save the data pointer from struct
+	movq -8(%rbp), %rdi
+	movq IMAGE_DATA_OFFSET(%rdi), %rax   
+	movq %rax, -40(%rbp) 	/* -40(%rbp) = input_img->data */
+	movq -16(%rbp), %rsi
+	movq IMAGE_DATA_OFFSET(%rsi), %rax
+	movq %rax, -48(%rbp)    /* -48(%rbp) = output_img->data */
+
+	movl $0, %r12d  /* curr row index */
+
+	# loop through each pixel index and run blur on it
+	.L_blur_row_img_loop: 
+		cmpl -32(%rbp), %r12d
+		jge .L_blur_row_img_loop_end  /* if curr row index >= height, exit */
+
+		movl $0, %r13d  /* curr col index */
+
+	.L_blur_col_img_loop: 
+		cmpl -24(%rbp), %r13d
+		jge .L_blur_col_img_loop_end  /* if curr col index >= width, exit */
+
+		# Blur the pixel at (r12d, r13d) and store it in output image
+		movq -8(%rbp), %rdi /* input image (param 1) for blur_pixel */
+		movl %r12d, %esi /* row (param 2) for blur_pixel */
+		movl %r13d, %edx /* col (param 3) for blur_pixel */
+		movl -20(%rbp), %ecx /* blur distance (param 4) */
+		call blur_pixel /* returns blurred pixel (a 32 bit number) in eax */
+		movl %eax, %ebx /* save blurred pixel in ebx */
+
+		# Compute output pixel index
+		movq -16(%rbp), %rdi
+		movl %r12d, %esi
+		movl %r13d, %edx
+		call compute_index /* eax = output pixel index */
+
+		# Store the blurred pixel in output image
+		movq -48(%rbp), %rdx /* get the output image data pointer from stack */
+		movl %ebx, (%rdx, %rax, 4) /* output_img->data[index] = blurred pixel */
+
+		# Increment col and continue inner loop
+		incl %r13d 
+		jmp .L_blur_col_img_loop
+
+	.L_blur_col_img_loop_end:
+		incl %r12d /* increment row index */
+		jmp .L_blur_row_img_loop
+
+	.L_blur_row_img_loop_end:
+
+	popq %rbx
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	addq $48, %rsp
+	popq %rbp
 	ret
+
 
 /*
  *  The `expand` transformation doubles the width and height of the image.
