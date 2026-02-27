@@ -161,27 +161,24 @@ rot_pixel:
 	.global blur_pixel
 blur_pixel:
 	/*
-	 * Register use:
-	 *   rdi: pointer to Image struct (input)
-	 *   rsi: row (input)
-	 *   rdx: column (input)
-	 *   rcx: blur distance (input)
+	 * Input registers:
+	 *   %rdi: pointer to Image struct
+	 *   %esi: row
+	 *   %edx: column
+	 *   %ecx: blur distance
+	 *
+	 * Temp registers:
+	 *   %r12d, %r13d: loop row/col
+	 *   %r14: pixel array base pointer
+	 *   %ebx: array index
 	 *
 	 * Memory use:
-	 *   -4(%rbp):  row
-	 *   -8(%rbp):  col
-	 *   -12(%rbp): blur distance
-	 *   -16(%rbp): original alpha of pixel
-	 *   -24(%rbp): pointer to Image struct (8 bytes)
-	 *   -28(%rbp): image height
-	 *   -32(%rbp): image width
-	 *   -36(%rbp): start_row (clamped)
-	 *   -40(%rbp): end_row (clamped)
-	 *   -44(%rbp): start_col (clamped)
-	 *   -48(%rbp): end_col (clamped)
-	 *   -52(%rbp): num_pixels
-	 *   -56(%rbp): (4 bytes padding for alignment)
-	 *   -64(%rbp): saved rsp value before dynamic array allocation (8 bytes)
+	 *   -4(%rbp): row, -8(%rbp): col, -12(%rbp): blur_dist
+	 *   -16(%rbp): original alpha, -24(%rbp): image pointer
+	 *   -28(%rbp): height, -32(%rbp): width
+	 *   -36(%rbp): start_row, -40(%rbp): end_row
+	 *   -44(%rbp): start_col, -48(%rbp): end_col
+	 *   -52(%rbp): num_pixels, -64(%rbp): saved rsp
 	 */
 
 	pushq %rbp
@@ -344,20 +341,18 @@ blur_pixel:
 	.global avg_pixels
 avg_pixels:
 	/*
-	 * Register use:
-	 *   %rdi: pointer to array of pixel values (input)
-	 *   %esi: number of pixels to average (input)
+	 * Input registers:
+	 *   %rdi: pointer to array of pixel values
+	 *   %esi: number of pixels to average
 	 *
-	 *   %r12d: r total (temp)
-	 *   %r13d: g total (temp)
-	 *   %r14d: b total (temp)
-	 *   %r15d: a total (temp)
-
-	 *  %rbx: loop index (temp)
+	 * Temp registers:
+	 *   %r12d: r total, %r13d: g total
+	 *   %r14d: b total, %r15d: a total
+	 *   %ebx: loop index
 	 *
 	 * Memory use:
-	 *  -8(%rbp): pointer to array of pixel values (temp)
-	 *  -16(%rbp): number of pixels to average (temp)
+	 *   -8(%rbp): pixel array pointer
+	 *   -16(%rbp): num_pixels
 	 */
 
 	pushq %rbp
@@ -486,34 +481,22 @@ avg_pixels:
 	.globl imgproc_squash
 imgproc_squash:
 	/*
-	 *   %rdi: pointer to input Image struct (input)
-	 *   %rsi: pointer to output Image struct (input)
-	 *   %edx: xfac (input)
-	 *   %ecx: yfac (input)
+	 * Input registers:
+	 *   %rdi: pointer to input Image struct
+	 *   %rsi: pointer to output Image struct
+	 *   %edx: xfac, %ecx: yfac
 	 *
-	 *   %rdx input image data pointer (temp)
-	 *   %rbx output image data pointer (temp)
-	 *   %r12d row index for loop (temp)
-	 *   %r13d column index for loop (temp)
-	 *   %r14d selected input row (temp)
-	 *   %r15d selected input col (temp)
+	 * Temp registers:
+	 *   %r12d: row index, %r13d: col index
+	 *   %r14d: input row, %r15d: input col
+	 *   %rbx: output data pointer
 	 *
-	 *   reserved registers:
-	 *   %rdi reserved to call compute index
-	 *   %rsi reserved to call compute index
-	 *   %rdx reserved to call compute index
-	 *
-	 *   Stack usage:
-	 *   -4(%rbp): input image width (temp)
-	 *   -8(%rbp): input image height (temp)
-	 *   -12(%rbp): output image width (temp)
-	 *   -16(%rbp): output image height (temp)
-	 *   -20(%rbp): xfac (temp)
-	 *   -24(%rbp): yfac (temp)
-	 *   -32(%rbp): input image pointer (temp)
-	 *   -40(%rbp): output image pointer (temp)
-	 *   -48(%rbp): input image data pointer (temp)
-	 *   -56(%rbp): output image data pointer (temp)
+	 * Memory use:
+	 *   -4(%rbp): input width, -8(%rbp): input height
+	 *   -12(%rbp): output width, -16(%rbp): output height
+	 *   -20(%rbp): xfac, -24(%rbp): yfac
+	 *   -32(%rbp): input img ptr, -40(%rbp): output img ptr
+	 *   -48(%rbp): input data ptr, -56(%rbp): output data ptr
 	 */
 
 	pushq %rbp
@@ -750,13 +733,19 @@ ret
 	.globl imgproc_blur
 imgproc_blur:
 	/*
-	 * Register use:
-	 *   %rdi: pointer to input Image struct (input)
-	 *   %rsi: pointer to output Image struct (input)
-	 *   %ecx: blur distance (input)
+	 * Input registers:
+	 *   %rdi: pointer to input Image struct
+	 *   %rsi: pointer to output Image struct
+	 *   %edx: blur distance
+	 *
+	 * Temp registers:
+	 *   %r12d: row index, %r13d: col index
+	 *   %ebx: blurred pixel value (temp storage)
 	 *
 	 * Memory use:
-	 *   TODO: describe how memory in the stack frame is used
+	 *   -8(%rbp): input img ptr, -16(%rbp): output img ptr
+	 *   -20(%rbp): blur_dist, -24(%rbp): width, -32(%rbp): height
+	 *   -40(%rbp): input data ptr, -48(%rbp): output data ptr
 	 */
 
 	pushq %rbp
@@ -882,30 +871,21 @@ imgproc_blur:
 	.globl imgproc_expand
 imgproc_expand:
 	/*
-	 * Register use:
-	 *   %rdi: pointer to input Image struct (input)
-	 *   %rsi: pointer to output Image struct (input)
+	 * Input registers:
+	 *   %rdi: pointer to input Image struct
+	 *   %rsi: pointer to output Image struct
 	 *
-	 *   r12d: row index for loop (temp)
-	 *   r13d: column index for loop (temp)
-	 *   r14d: output pixel index for this iteration (one for each loop)
-	 *
-	 *   r8d: input pixel index j/2 and i/2 (temp)
-	 *   r15d: number of pixels to average (temp)
+	 * Temp registers:
+	 *   %r12d: row index, %r13d: col index
+	 *   %r14d: output pixel index, %r15d: num_pixels to avg
+	 *   %r8d: input pixel index (i/2, j/2)
 	 *
 	 * Memory use:
-	 *   -8(%rbp): input image pointer
-	 *   -16(%rbp): output image pointer
-	 *   -20(%rbp): input image height
-	 *   -24(%rbp): input image width
-	 *   -28(%rbp): output image height
-	 *   -32(%rbp): output image width
-	 *   -40(%rbp): input data pointer
-	 *   -48(%rbp): output data pointer
-	 *   -60(%rbp): reserve for array
-	 *   -64(%rbp): reserve for array
-	 *   -68(%rbp): reserve for array
-	 *   -72(%rbp): Base address for array of pixels to average
+	 *   -8(%rbp): input img ptr, -16(%rbp): output img ptr
+	 *   -20(%rbp): input height, -24(%rbp): input width
+	 *   -28(%rbp): output height, -32(%rbp): output width
+	 *   -40(%rbp): input data ptr, -48(%rbp): output data ptr
+	 *   -72(%rbp) to -60(%rbp): pixel array for averaging
 	 */
 
 	pushq %rbp
