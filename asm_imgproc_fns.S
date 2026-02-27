@@ -161,7 +161,177 @@ rot_pixel:
 # TODO
 	.global blur_pixel
 blur_pixel:
+	/*
+	 * Register use:
+	 *   rdi: pointer to Image struct (input)
+	 *   rsi: row (input)
+	 *   rdx: column (input)
+	 *   rcx: blur distance (input)
+	 *
+	 * Memory use:
+	 *   -4(%rbp):  row
+	 *   -8(%rbp):  col
+	 *   -12(%rbp): blur distance
+	 *   -16(%rbp): (4 bytes padding for alignment)
+	 *   -24(%rbp): pointer to Image struct (8 bytes)
+	 *   -28(%rbp): image height
+	 *   -32(%rbp): image width
+	 *   -36(%rbp): start_row (clamped)
+	 *   -40(%rbp): end_row (clamped)
+	 *   -44(%rbp): start_col (clamped)
+	 *   -48(%rbp): end_col (clamped)
+	 *   -52(%rbp): num_pixels
+	 *   -56(%rbp): (4 bytes padding for alignment)
+	 *   -64(%rbp): saved rsp value before dynamic array allocation (8 bytes)
+	 */
 
+	pushq %rbp
+	movq %rsp, %rbp
+	subq $64, %rsp        
+	pushq %r12
+	pushq %r13
+	pushq %r14
+	pushq %r15
+	pushq %rbx
+
+	# Save input parameters on stack
+	movl %esi, -4(%rbp) /* -4(%rbp) = row */
+	movl %edx, -8(%rbp) /* -8(%rbp) = col */
+	movl %ecx, -12(%rbp) /* -12(%rbp) = blur distance */
+	movq %rdi, -24(%rbp) /* -24(%rbp) = pointer to Image struct */
+
+	# Height and width
+	movq -24(%rbp), %r12 /* r12 = image pointer */
+	movl IMAGE_HEIGHT_OFFSET(%r12), %r12d /* r12d = image height */
+	movl %r12d, -28(%rbp) /* -28(%rbp) = image height */
+	movq -24(%rbp), %r13 /* r13 = image pointer */
+	movl IMAGE_WIDTH_OFFSET(%r13), %r13d /* r13d = image width */
+	movl %r13d, -32(%rbp) /* -32(%rbp) = image width */
+
+	# Save alpha of original pixel
+	movq -24(%rbp), %rdi    /* rdi = image pointer */
+	movl -4(%rbp), %esi     /* esi = row */
+	movl -8(%rbp), %edx     /* edx = col */
+	call compute_index      /* eax = pixel index */
+
+	movq -24(%rbp), %rdi    /* rdi = image pointer (reload) */
+	movq IMAGE_DATA_OFFSET(%rdi), %rdx /* rdx = image data pointer */
+	movl (%rdx, %rax, 4), %eax /* eax = original pixel value */
+	movl %eax, %edi         /* edi = pixel value (arg for get_a) */
+	call get_a              /* eax = alpha component */
+	movl %eax, -16(%rbp)    /* store alpha at -16(%rbp) */
+
+	# Compute the range of blur
+	movl -4(%rbp), %r12d /* r12d = row */
+	subl -12(%rbp), %r12d /* r12d = row - blur_dist, this is the starting row for blur */
+	cmpl $0, %r12d
+	jge .L_no_clamp_start_row /* if starting row >= 0 */
+	movl $0, %r12d /* set to 0 if starting row < 0 */
+	.L_no_clamp_start_row:
+	movl %r12d, -36(%rbp) /* -36(%rbp) = starting row for blur */
+
+	movl -4(%rbp), %r12d /* r12d = row */
+	addl -12(%rbp), %r12d /* r12d = row + blur_dist, this is the ending row for blur */
+	movl -28(%rbp), %eax /* compare ending row (r12d) to height (-28)*/
+	decl %eax            /* eax = height - 1 */
+	cmpl %eax, %r12d
+	jle .L_no_clamp_end_row /* if ending row < height */
+	movl %eax, %r12d /* clamp to height - 1 */
+	.L_no_clamp_end_row:
+	movl %r12d, -40(%rbp) /* -40(%rbp) = ending row for blur */
+
+	movl -8(%rbp), %r12d /* r12d = col */
+	subl -12(%rbp), %r12d /* r12d = col - blur_dist, this is the starting col for blur */
+	cmpl $0, %r12d
+	jge .L_no_clamp_start_col /* if r12d greater equal 0 */
+	movl $0, %r12d /* set to 0 if starting col < 0 */
+	.L_no_clamp_start_col:
+	movl %r12d, -44(%rbp) /* -44(%rbp) = starting col for blur */
+
+	movl -8(%rbp), %r12d /* r12d = col */
+	addl -12(%rbp), %r12d /* r12d = col + blur_dist, this is the ending col for blur */
+	movl -32(%rbp), %eax
+	decl %eax             /* eax = width - 1 */
+	cmpl %eax, %r12d
+	jle .L_no_clamp_end_col
+	movl %eax, %r12d /* clamp to width - 1 */
+	.L_no_clamp_end_col:
+	movl %r12d, -48(%rbp) /* -48(%rbp) = ending col for blur */
+
+	# Compute num_pixels = (end_row - start_row + 1) * (end_col - start_col + 1)
+	movl -40(%rbp), %eax
+	subl -36(%rbp), %eax
+	addl $1, %eax           /* eax = row_count */
+	movl -48(%rbp), %ecx
+	subl -44(%rbp), %ecx
+	addl $1, %ecx           /* ecx = col_count */
+	imull %ecx, %eax        /* eax = num_pixels */
+	movl %eax, -52(%rbp)    /* -52(%rbp) = num_pixels */
+
+	# allocate array 
+	movq %rsp, -64(%rbp)    /* save old rsp so we can restore it later */
+	movl -52(%rbp), %ecx    /* ecx = num_pixels */
+	imull $4, %ecx           /* ecx = num_pixels * 4 bytes */
+	addl $15, %ecx 			
+	andl $-16, %ecx          /* align up to 16 bytes */
+	movslq %ecx, %rcx    /* allocate that many bytes on stack for pixel array, rcx = num_pixels * 4 */
+	subq %rcx, %rsp          /* rsp moves down: array now lives at [rsp..old_rsp) */
+	movq %rsp, %r14          /* r14 = base pointer to pixel array */
+
+	# Fill array: nested loop over [start_row..end_row] x [start_col..end_col]
+	movl $0, %ebx            /* ebx = array index */
+	movl -36(%rbp), %r12d    /* r12d = current row = start_row */
+
+.L_blur_row_loop:
+	cmpl -40(%rbp), %r12d
+	jg .L_blur_row_done       /* if cur_row > end_row, done */
+	movl -44(%rbp), %r13d    /* r13d = current col = start_col */
+
+	.L_blur_col_loop:
+		cmpl -48(%rbp), %r13d
+		jg .L_blur_col_done       /* if cur_col > end_col, done */
+
+		# Compute pixel index for curr row and col
+		movq -24(%rbp), %rdi
+		movl %r12d, %esi
+		movl %r13d, %edx
+		call compute_index        /* eax = flat pixel index */
+
+		# Load pixel at that index from image data and store in array
+		movq -24(%rbp), %rdi
+		movq IMAGE_DATA_OFFSET(%rdi), %rdx
+		movl (%rdx, %rax, 4), %eax         /* eax = pixel value */
+		movl %eax, (%r14, %rbx, 4)         /* array[ebx] = pixel */
+
+		incl %ebx
+		incl %r13d
+		jmp .L_blur_col_loop
+
+	.L_blur_col_done:
+		incl %r12d
+		jmp .L_blur_row_loop
+
+.L_blur_row_done:
+	# Call avg_pixels(array_ptr, num_pixels) -> averaged pixel in eax
+	movq %r14, %rdi           /* rdi = base pointer to pixel array */
+	movl -52(%rbp), %esi      /* esi = num_pixels */
+	call avg_pixels
+
+	# restore alpha, alpha is the last 8 bits of eax, so we can just mask it in
+	movl -16(%rbp), %ecx    /* ecx = original alpha */
+	andl $0xFF, %ecx        /* mask to lowest 8 bits */
+	andl $0xFFFFFF00, %eax /* clear out old alpha from averaged pixel */
+	orl %ecx, %eax        /* or in the original alpha */
+
+	movq -64(%rbp), %rsp      /* restore rsp, freeing the dynamic array */
+
+	popq %rbx
+	popq %r15
+	popq %r14
+	popq %r13
+	popq %r12
+	addq $64, %rsp
+	popq %rbp
 	ret
 
 /* 
@@ -788,9 +958,7 @@ imgproc_expand:
 			# Compute col/2 + 1
 			movl %r13d, %edx
 			shrl $1, %edx
-			addl $1, %edx
-			cmpl -24(%rbp), %edx
-			jge .L_call_avg_pixels /* if out of bounds skip */
+			addl $1, %edx /* Out of bound checked in the last step */
 
 			# call compute index for (row/2 + 1, col/2 + 1)
 			movq -8(%rbp), %rdi
