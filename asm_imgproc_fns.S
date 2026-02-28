@@ -266,12 +266,12 @@ blur_pixel:
 
 	# allocate array 
 	movq %rsp, -64(%rbp)    /* save old rsp so we can restore it later */
-	movl -52(%rbp), %ecx    /* ecx = num_pixels */
+	movl -52(%rbp), %ecx    
 	imull $4, %ecx           /* ecx = num_pixels * 4 bytes */
 	addl $15, %ecx 			
 	andl $-16, %ecx          /* align up to 16 bytes */
-	movslq %ecx, %rcx    /* allocate that many bytes on stack for pixel array, rcx = num_pixels * 4 */
-	subq %rcx, %rsp          /* rsp moves down: array now lives at [rsp..old_rsp) */
+	movslq %ecx, %rcx   
+	subq %rcx, %rsp          /* moves rsp down: array now lives at [rsp..old_rsp) */
 	movq %rsp, %r14          /* r14 = base pointer to pixel array */
 
 	# Fill array: nested loop over [start_row..end_row] x [start_col..end_col]
@@ -308,18 +308,19 @@ blur_pixel:
 		jmp .L_blur_row_loop
 
 	.L_blur_row_done:
+	
 	# Call avg_pixels(array_ptr, num_pixels) -> averaged pixel in eax
 	movq %r14, %rdi           /* rdi = base pointer to pixel array */
 	movl -52(%rbp), %esi      /* esi = num_pixels */
 	call avg_pixels
 
-	# restore alpha, alpha is the last 8 bits of eax, so we can just mask it in
+	# restore alpha
 	movl -16(%rbp), %ecx    /* ecx = original alpha */
 	andl $0xFF, %ecx        /* mask to lowest 8 bits */
 	andl $0xFFFFFF00, %eax /* clear out old alpha from averaged pixel */
 	orl %ecx, %eax        /* or in the original alpha */
 
-	movq -64(%rbp), %rsp      /* restore rsp, freeing the dynamic array */
+	movq -64(%rbp), %rsp      /* restore rsp, abandon the array */
 
 	popq %rbx
 	popq %r15
@@ -980,8 +981,7 @@ imgproc_expand:
 		# Store the pixel value into array
 		movq -40(%rbp), %rdx /* load input data pointer before reading */
 		movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2 + 1, col/2) */
-		leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
-		movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
+		movl %eax, -72(%rbp, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
 		incl %r15d /* pixel to average ++ */
 
 	# If col is odd, add row/2 and col/2 + 1 pixel to array
@@ -1005,8 +1005,7 @@ imgproc_expand:
 		# Store the pixel value into array
 		movq -40(%rbp), %rdx /* load input data pointer before reading */
 		movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2, col/2 + 1) */
-		leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
-		movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
+		movl %eax, -72(%rbp, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
 		incl %r15d /* pixel to average ++ */
 
 	# Add row/2 + 1 and col/2 + 1 pixel (r11d) to average if row and col are odd
@@ -1032,8 +1031,7 @@ imgproc_expand:
 		# Store the pixel into array
 		movq -40(%rbp), %rdx /* load input data pointer before reading */
 		movl (%rdx, %rax, 4), %eax /* eax = pixel value at (row/2 + 1, col/2 + 1) */
-		leaq -72(%rbp), %rdi /* rdi = ptr to array for avg_pixels */
-		movl %eax, (%rdi, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
+		movl %eax, -72(%rbp, %r15, 4) /* store in array, base (-72) + index (r15 * 4) */
 		incl %r15d /* pixel to average ++ */
 
 		# Call avg_pixels

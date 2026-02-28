@@ -64,6 +64,12 @@ void test_blur_pixel( TestObjs *objs );
 void test_color_rot_pixel( TestObjs *objs );
 void test_avg_pixel( TestObjs *objs );
 
+// Edge case tests
+void test_squash_edge( TestObjs *objs );
+void test_color_rot_edge( TestObjs *objs );
+void test_blur_edge( TestObjs *objs );
+void test_expand_edge( TestObjs *objs );
+
 int main( int argc, char **argv ) {
   // allow the specific test to execute to be specified as the
   // first command line argument
@@ -87,6 +93,12 @@ int main( int argc, char **argv ) {
   TEST( test_blur_pixel );
   TEST( test_color_rot_pixel );
   TEST( test_avg_pixel );
+
+  // Edge case tests
+  TEST( test_squash_edge );
+  TEST( test_color_rot_edge );
+  TEST( test_blur_edge );
+  TEST( test_expand_edge );
 
   TEST_FINI();
 }
@@ -285,4 +297,181 @@ void test_color_rot_pixel( TestObjs *objs ) {
 void test_avg_pixel( TestObjs *objs ) {
   uint32_t pixels[4] = { make_pixel(0x00, 0x00, 0x00, 0xFF), make_pixel(0xFF, 0xFF, 0xFF, 0x00), make_pixel(0x80, 0x80, 0x80, 0xFF), make_pixel(0x40, 0x40, 0x40, 0xFF) };
   AVG_PIXEL_TEST(pixels, 4, make_pixel(0x6F, 0x6F, 0x6F, 0xBF)); // 00 + FF + 80 + 40 / 4 = 6F, avg of a is FF + FF + FF + 00 / 4 = BF
+}
+
+void test_squash_edge( TestObjs *objs ) {
+  // 3x3 
+  static struct TestImageData sq_in = {
+    3, 3, {
+      0xFF000080, 0x00FF0080, 0x0000FF80,
+      0x80800080, 0xFFFFFF80, 0x00000080,
+      0xFF00FF80, 0x00FFFF80, 0xFFFF0080,
+    }
+  };
+  struct Image src;
+  init_image_from_testdata( &src, &sq_in );
+
+  // Case 1: factors equal full image size -> 1x1 output = input[0][0]
+  {
+    struct Image out;
+    img_init( &out, 1, 1 );
+    imgproc_squash( &src, &out, 3, 3 );
+    ASSERT( out.data[0] == 0xFF000080 );
+    img_cleanup( &out );
+  }
+
+  // Case 2: xfac=2, yfac=1 -> output 2x3, samples every other column (0 and 2)
+  {
+    struct Image out;
+    img_init( &out, 2, 3 ); // width=2, height=3
+    imgproc_squash( &src, &out, 2, 1 );
+    ASSERT( out.data[0] == 0xFF000080 ); // input[0][0]
+    ASSERT( out.data[1] == 0x0000FF80 ); // input[0][2]
+    ASSERT( out.data[2] == 0x80800080 ); // input[1][0]
+    ASSERT( out.data[3] == 0x00000080 ); // input[1][2]
+    ASSERT( out.data[4] == 0xFF00FF80 ); // input[2][0]
+    ASSERT( out.data[5] == 0xFFFF0080 ); // input[2][2]
+    img_cleanup( &out );
+  }
+
+  // Case 3: xfac=1, yfac=2 -> output 3x2, samples every other row (0 and 2)
+  {
+    struct Image out;
+    img_init( &out, 3, 2 ); // width=3, height=2
+    imgproc_squash( &src, &out, 1, 2 );
+    ASSERT( out.data[0] == 0xFF000080 ); // input[0][0]
+    ASSERT( out.data[1] == 0x00FF0080 ); // input[0][1]
+    ASSERT( out.data[2] == 0x0000FF80 ); // input[0][2]
+    ASSERT( out.data[3] == 0xFF00FF80 ); // input[2][0]
+    ASSERT( out.data[4] == 0x00FFFF80 ); // input[2][1]
+    ASSERT( out.data[5] == 0xFFFF0080 ); // input[2][2]
+    img_cleanup( &out );
+  }
+}
+
+void test_color_rot_edge( TestObjs *objs ) {
+  // Case 1: single pure-red pixel: R=FF,G=00,B=00,A=FF
+  {
+    static struct TestImageData red_in = { 1, 1, { 0xFF0000FF } };
+    struct Image src, out;
+    init_image_from_testdata( &src, &red_in );
+    img_init( &out, 1, 1 );
+    imgproc_color_rot( &src, &out );
+    ASSERT( out.data[0] == 0x00FF00FF );
+    img_cleanup( &out );
+  }
+
+  // Case 2: uniform grey (R=G=B) = rotation means pixel unchanged
+  {
+    static struct TestImageData grey_in = { 1, 1, { 0x808080FF } };
+    struct Image src, out;
+    init_image_from_testdata( &src, &grey_in );
+    img_init( &out, 1, 1 );
+    imgproc_color_rot( &src, &out );
+    ASSERT( out.data[0] == 0x808080FF );
+    img_cleanup( &out );
+  }
+
+  // Case 3: applying color_rot three times restores the original image
+  {
+    struct Image *out1 = create_output_image( &objs->smol );
+    struct Image *out2 = create_output_image( &objs->smol );
+    struct Image *out3 = create_output_image( &objs->smol );
+    imgproc_color_rot( &objs->smol, out1 );
+    imgproc_color_rot( out1, out2 );
+    imgproc_color_rot( out2, out3 );
+    ASSERT( images_equal( out3, &objs->smol ) );
+    destroy_img( out1 );
+    destroy_img( out2 );
+    destroy_img( out3 );
+  }
+}
+
+void test_blur_edge( TestObjs *objs ) {
+  // Case 1: blur_dist=0 on small = output identical to input 
+  {
+    struct Image *out = create_output_image( &objs->small );
+    imgproc_blur( &objs->small, out, 0 );
+    ASSERT( images_equal( out, &objs->small ) );
+    destroy_img( out );
+  }
+
+  // Case 2: very large blur_dist on small 3x3 covers all pixels either way;
+  // dist=2 and dist=100 must yield the same result 
+  {
+    struct Image *out2   = create_output_image( &objs->small );
+    struct Image *out100 = create_output_image( &objs->small );
+    imgproc_blur( &objs->small, out2,   2 );
+    imgproc_blur( &objs->small, out100, 100 );
+    ASSERT( images_equal( out2, out100 ) );
+    destroy_img( out2 );
+    destroy_img( out100 );
+  }
+
+  // Case 3: 1x1 input with a large blur_dist → no neighbors, output = input
+  {
+    static struct TestImageData one = { 1, 1, { 0xDEADBEEF } };
+    struct Image src, out;
+    init_image_from_testdata( &src, &one );
+    img_init( &out, 1, 1 );
+    imgproc_blur( &src, &out, 5 );
+    ASSERT( out.data[0] == 0xDEADBEEF );
+    img_cleanup( &out );
+  }
+}
+
+void test_expand_edge( TestObjs *objs ) {
+  // Case 1: 1x1 input → 2x2 output; all 4 pixels equal the single input pixel
+  {
+    static struct TestImageData one = { 1, 1, { 0xCAFEBABE } };
+    struct Image src, out;
+    init_image_from_testdata( &src, &one );
+    img_init( &out, 2, 2 );
+    imgproc_expand( &src, &out );
+    ASSERT( out.data[0] == 0xCAFEBABE ); // (0,0) even/even
+    ASSERT( out.data[1] == 0xCAFEBABE ); // (0,1) even/odd, col+1 OOB
+    ASSERT( out.data[2] == 0xCAFEBABE ); // (1,0) odd/even, row+1 OOB
+    ASSERT( out.data[3] == 0xCAFEBABE ); // (1,1) odd/odd, all neighbors OOB
+    img_cleanup( &out );
+  }
+
+  // Case 2: single-row 1x3 input [A,B,C] → 2x6 output
+  {
+    static struct TestImageData row_in = {
+      3, 1, { 0x40000020, 0x00400020, 0x00004020 }
+    };
+    struct Image src, out;
+    init_image_from_testdata( &src, &row_in );
+    img_init( &out, 6, 2 );
+    imgproc_expand( &src, &out );
+    // Row 0
+    ASSERT( out.data[0] == 0x40000020 ); // (0,0) → A
+    ASSERT( out.data[1] == 0x20200020 ); // (0,1) → avg(A,B)
+    ASSERT( out.data[2] == 0x00400020 ); // (0,2) → B
+    ASSERT( out.data[3] == 0x00202020 ); // (0,3) → avg(B,C)
+    ASSERT( out.data[4] == 0x00004020 ); // (0,4) → C
+    ASSERT( out.data[5] == 0x00004020 ); // (0,5) → C (col+1 OOB)
+    // Row 1: row+1 OOB for all, so same as row 0
+    ASSERT( out.data[6]  == 0x40000020 );
+    ASSERT( out.data[7]  == 0x20200020 );
+    ASSERT( out.data[8]  == 0x00400020 );
+    ASSERT( out.data[9]  == 0x00202020 );
+    ASSERT( out.data[10] == 0x00004020 );
+    ASSERT( out.data[11] == 0x00004020 );
+    img_cleanup( &out );
+  }
+
+  // Case 3: uniform color image → expand output is also entirely that uniform color
+  {
+    static struct TestImageData unif = {
+      2, 2, { 0x7F7F7FFF, 0x7F7F7FFF, 0x7F7F7FFF, 0x7F7F7FFF }
+    };
+    struct Image src, out;
+    init_image_from_testdata( &src, &unif );
+    img_init( &out, 4, 4 );
+    imgproc_expand( &src, &out );
+    for ( int i = 0; i < 16; i++ )
+      ASSERT( out.data[i] == 0x7F7F7FFF );
+    img_cleanup( &out );
+  }
 }
